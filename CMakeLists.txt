@@ -92,7 +92,7 @@ if(COINOP_BUILD_TOOLS)
     # because coinoptest deliberately links no graphics API at all, and the
     # moment it did, the guarantee that the sim is GL-free would be gone.
     if(APPLE)
-        add_executable(coinopgl tools/coinopgl/main.cpp source/Shaders.cpp)
+        add_executable(coinopgl tools/coinopgl/main.cpp source/Shaders.cpp source/Controls.cpp)
         target_link_libraries(coinopgl PRIVATE coinop_sim
             "-framework OpenGL"
         )

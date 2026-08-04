@@ -13,6 +13,14 @@ Five playable arcade games for [Resolume](https://resolume.com) Arena and
 Avenue, as a pair of FFGL plugins. Driven by MIDI or OSC, or left to play
 themselves.
 
+**Video:** [What it does, in 50 seconds](https://www.youtube.com/watch?v=PENDING)
+
+![Snake, Bricks, Marchers and Drift, on four of the six palettes](docs/hero.png)
+
+<sub>Four of the five games, on four of the six palettes. Rendered by
+`coinopgl`, the offline harness — the real autopilot playing through the real
+cell shader, not a Resolume screen capture.</sub>
+
 | Game | What it is |
 | --- | --- |
 | **Snake** | Grows, turns, traps itself. Two buttons or four. |
@@ -36,6 +44,13 @@ Two jobs, and most of the design follows from the second:
   mapper samples it, and the playfield is what the lights do. That is why
   everything is drawn as cells, why the grid size is a parameter, and why even
   the vector game is rasterised.
+
+![Drift at nineteen cells across, with the cells round and the gaps open](docs/pixelmap.png)
+
+<sub>The same Drift, with the grid coarsened to nineteen cells and the gaps
+opened. This is the shape the plugin takes when a pixel mapper is sampling it —
+and the reason the vector game is drawn as cells at all. A hairline vector lands
+between fixtures and disappears.</sub>
 
 ## Controls
 

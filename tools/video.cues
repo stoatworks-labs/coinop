@@ -1,0 +1,100 @@
+# The project video, as a cue sheet.
+#
+# Every frame is the real games being played by the real autopilot, rendered
+# through the real cell shader -- this is the plugin running, not a mock-up.
+# Render with:
+#
+#   ./build/coinopgl --sequence /tmp/co-frames --script tools/video.cues \
+#                    --size 1920x1080 --seconds 46 --fps 30
+#
+# Syntax: `T Name=V` sets at a time, `T1..T2 Name=V1..V2` ramps between two
+# (eased, because a parameter that starts and stops abruptly reads as a cut).
+#
+# Values are the 0..1 the host sees, except Game, Palette, Fit and Aspect, which
+# are indices -- the same split the plugin itself has, see Controls.h.
+#
+# The order of the piece is the order of the argument: the game everybody knows
+# first, then the one that does something to your footage, then the two that are
+# best on a wall, then the one that should not fit in a grid and does. The grid
+# goes coarse at the end, because pixel mapping is the thing worth staying for.
+
+# ------------------------------------------------------- 0s: Snake, Phosphor
+# Green CRT, because that is what this is. Nothing clever for the first eight
+# seconds -- a snake, playing itself, in a plugin.
+0.0   Game=0
+0.0   Palette=0
+0.0   Speed=0.40
+0.0   Skill=0.85
+0.0   Grid=0.415
+0.0   Round=0.25
+0.0   Gap=0.18
+0.0   Glow=0.40
+0.0   React=0.35
+
+# The glow comes up as the snake gets longer, so the picture builds rather than
+# sitting still.
+1.0..8.0   Glow=0.40..0.62
+
+# ------------------------------------------------------- 8s: Bricks, Amber
+# The one that earns the effect plugin. Amber because the brick rows read as
+# rows in it.
+8.0   Game=1
+8.0   Palette=1
+8.0   Speed=0.50
+8.0   Skill=0.80
+8.0   Difficulty=0.55
+8.0   Glow=0.45
+8.0   Round=0.10
+8.0   Gap=0.22
+
+# Round the cells off through the middle of the section -- the same playfield,
+# a different object.
+11.0..16.0  Round=0.10..0.85
+
+# ------------------------------------------------------ 17s: Marchers, Ice
+17.0  Game=2
+17.0  Palette=2
+17.0  Speed=0.55
+17.0  Skill=0.75
+17.0  Difficulty=0.5
+17.0  Round=0.30
+17.0  Gap=0.16
+17.0  Glow=0.50
+
+# The formation accelerates as it thins out -- that is the game, not the cue
+# sheet. All this does is lift the reactive glow so the last few read as urgent.
+20.0..26.0  React=0.35..0.85
+
+# ------------------------------------------------------ 26s: Rally, Candy
+# Three moving objects on a black field. The most legible thing here at any
+# size, which is why it is the one just before the grid goes coarse.
+26.0  Game=3
+26.0  Palette=3
+26.0  Speed=0.55
+26.0  Skill=0.72
+26.0  Round=0.45
+26.0  Gap=0.20
+26.0  Glow=0.55
+26.0  React=0.45
+
+# --------------------------------------------------------- 34s: Drift, Fire
+# The vector game, rasterised. Rocks are rotating polygons Bresenham'd into the
+# same cells everything else uses.
+34.0  Game=4
+34.0  Palette=5
+34.0  Speed=0.5
+34.0  Skill=0.8
+34.0  Difficulty=0.55
+34.0  Round=0.20
+34.0  Gap=0.14
+34.0  Glow=0.55
+
+# ------------------------------------------------- 39s: the pixel-map ending
+# Drop the grid to nineteen cells across and open the gaps. This is what the
+# plugin looks like when the composition is a fixture layout and Resolume's
+# pixel mapper is sampling it -- and it is the reason even the vector game is
+# drawn as cells. A hairline vector would not survive this.
+39.0..44.0  Grid=0.415..0.25
+39.0..44.0  Gap=0.14..0.42
+39.0..44.0  Round=0.20..1.00
+39.0..44.0  Glow=0.55..0.80

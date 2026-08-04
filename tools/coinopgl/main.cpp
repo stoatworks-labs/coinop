@@ -21,6 +21,7 @@
 	    build/coinopgl --dump     also write a PPM of what it rendered
 */
 
+#include "Controls.h"
 #include "Shaders.h"
 #include "Sim.h"
 
@@ -28,6 +29,7 @@
 #include <OpenGL/gl3.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -278,14 +280,392 @@ std::vector< uint8_t > RenderGame( GLuint prog, GameId id, int outW, int outH, b
 	return pixels;
 }
 
+//===========================================================================
+// Sequence rendering.
+//
+// The stills in docs/ and every frame of the project video come from here, so
+// that what is published is the real plugin rendering rather than a mock-up or
+// a screen capture of something adjacent. A still is just a sequence of one
+// frame at a given time.
+//===========================================================================
+
+/// Everything a cue can move. All in the 0..1 the host sees, except the four
+/// enum-valued ones, which are indices -- the same split the plugin has.
+struct Look
+{
+	float game = 0.0f, palette = 0.0f, fit = 0.0f, aspect = 0.0f;
+	float speed = 0.45f, skill = 0.65f, difficulty = 0.5f;
+	float grid = 0.415f, seed = 0.25f;
+	float round = 0.25f, gap = 0.18f, glow = 0.45f, scan = 0.0f, react = 0.35f;
+	float backR = 0.02f, backG = 0.02f, backB = 0.03f, backA = 1.0f;
+};
+
+float* LookField( Look& L, const std::string& name )
+{
+	if( name == "Game" ) return &L.game;
+	if( name == "Palette" ) return &L.palette;
+	if( name == "Fit" ) return &L.fit;
+	if( name == "Aspect" ) return &L.aspect;
+	if( name == "Speed" ) return &L.speed;
+	if( name == "Skill" ) return &L.skill;
+	if( name == "Difficulty" ) return &L.difficulty;
+	if( name == "Grid" ) return &L.grid;
+	if( name == "Seed" ) return &L.seed;
+	if( name == "Round" ) return &L.round;
+	if( name == "Gap" ) return &L.gap;
+	if( name == "Glow" ) return &L.glow;
+	if( name == "Scan" ) return &L.scan;
+	if( name == "React" ) return &L.react;
+	if( name == "BackR" ) return &L.backR;
+	if( name == "BackG" ) return &L.backG;
+	if( name == "BackB" ) return &L.backB;
+	if( name == "BackA" ) return &L.backA;
+	return nullptr;
+}
+
+struct Cue
+{
+	float t0 = 0.0f, t1 = 0.0f;
+	std::string name;
+	float v0 = 0.0f, v1 = 0.0f;
+};
+
+/// `T Name=V` sets at a time; `T0..T1 Name=V0..V1` ramps between two. Ramps are
+/// eased, because a parameter that starts and stops abruptly reads as a cut.
+bool LoadCues( const char* path, std::vector< Cue >& out )
+{
+	FILE* f = std::fopen( path, "r" );
+	if( !f )
+		return false;
+
+	char line[ 512 ];
+	while( std::fgets( line, sizeof( line ), f ) )
+	{
+		std::string s( line );
+		const size_t hash = s.find( '#' );
+		if( hash != std::string::npos )
+			s = s.substr( 0, hash );
+
+		const size_t eq = s.find( '=' );
+		if( eq == std::string::npos )
+			continue;
+
+		std::string lhs = s.substr( 0, eq );
+		std::string rhs = s.substr( eq + 1 );
+
+		// Times.
+		size_t p = 0;
+		while( p < lhs.size() && std::isspace( (unsigned char)lhs[ p ] ) )
+			++p;
+
+		const size_t timeEnd = lhs.find_first_of( " \t", p );
+		if( timeEnd == std::string::npos )
+			continue;
+
+		std::string times = lhs.substr( p, timeEnd - p );
+		std::string name  = lhs.substr( timeEnd );
+		name.erase( 0, name.find_first_not_of( " \t" ) );
+		name.erase( name.find_last_not_of( " \t\r\n" ) + 1 );
+
+		Cue c;
+		const size_t dots = times.find( ".." );
+		if( dots != std::string::npos )
+		{
+			c.t0 = std::stof( times.substr( 0, dots ) );
+			c.t1 = std::stof( times.substr( dots + 2 ) );
+		}
+		else
+		{
+			c.t0 = c.t1 = std::stof( times );
+		}
+
+		rhs.erase( 0, rhs.find_first_not_of( " \t" ) );
+		const size_t vdots = rhs.find( ".." );
+		if( vdots != std::string::npos )
+		{
+			c.v0 = std::stof( rhs.substr( 0, vdots ) );
+			c.v1 = std::stof( rhs.substr( vdots + 2 ) );
+		}
+		else
+		{
+			c.v0 = c.v1 = std::stof( rhs );
+		}
+
+		c.name = name;
+		Look probe;
+		if( LookField( probe, name ) == nullptr )
+		{
+			std::printf( "  warning: unknown cue parameter '%s'\n", name.c_str() );
+			continue;
+		}
+		out.push_back( c );
+	}
+
+	std::fclose( f );
+	return true;
+}
+
+Look LookAt( const std::vector< Cue >& cues, float t )
+{
+	Look L;
+	for( const Cue& c : cues )
+	{
+		float* field = LookField( L, c.name );
+		if( !field )
+			continue;
+
+		if( t < c.t0 )
+			continue;
+
+		if( t >= c.t1 || c.t1 <= c.t0 )
+		{
+			*field = c.v1;
+		}
+		else
+		{
+			const float u = ( t - c.t0 ) / ( c.t1 - c.t0 );
+			const float e = u * u * ( 3.0f - 2.0f * u );// smoothstep
+			*field        = c.v0 + ( c.v1 - c.v0 ) * e;
+		}
+	}
+	return L;
+}
+
+void WritePPM( const std::string& path, const std::vector< uint8_t >& px, int w, int h )
+{
+	FILE* f = std::fopen( path.c_str(), "wb" );
+	if( !f )
+		return;
+
+	std::fprintf( f, "P6\n%d %d\n255\n", w, h );
+	for( int y = h - 1; y >= 0; --y )
+		for( int x = 0; x < w; ++x )
+			std::fwrite( &px[ ( size_t( y ) * size_t( w ) + size_t( x ) ) * 4 ], 1, 3, f );
+
+	std::fclose( f );
+}
+
+/**
+	Render a cue-driven sequence to numbered PPMs.
+
+	One `Sim` runs across the whole sequence and is advanced by real elapsed
+	time, so the games are genuinely playing rather than being posed. Switching
+	the Game cue restarts that game, which is what a montage wants.
+*/
+int RenderSequence( GLuint prog, const std::vector< Cue >& cues, const char* outDir,
+                    int w, int h, float seconds, int fps, const char* singleFrame )
+{
+	Sim sim;
+	Input in;
+	int currentGame = -1;
+
+	GLuint cellTex = 0;
+	glGenTextures( 1, &cellTex );
+	glBindTexture( GL_TEXTURE_2D, cellTex );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+	int texW = 0, texH = 0;
+
+	GLuint fbo = 0, colour = 0;
+	glGenTextures( 1, &colour );
+	glBindTexture( GL_TEXTURE_2D, colour );
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
+	glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
+	glGenFramebuffers( 1, &fbo );
+	glBindFramebuffer( GL_FRAMEBUFFER, fbo );
+	glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colour, 0 );
+
+	const float verts[] = {
+		-1.0f, -1.0f, 0.0f, 0.0f,
+		 1.0f, -1.0f, 1.0f, 0.0f,
+		-1.0f,  1.0f, 0.0f, 1.0f,
+		 1.0f,  1.0f, 1.0f, 1.0f,
+	};
+	GLuint vao = 0, vbo = 0;
+	glGenVertexArrays( 1, &vao );
+	glBindVertexArray( vao );
+	glGenBuffers( 1, &vbo );
+	glBindBuffer( GL_ARRAY_BUFFER, vbo );
+	glBufferData( GL_ARRAY_BUFFER, sizeof( verts ), verts, GL_STATIC_DRAW );
+	glEnableVertexAttribArray( 0 );
+	glVertexAttribPointer( 0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof( float ), nullptr );
+	glEnableVertexAttribArray( 1 );
+	glVertexAttribPointer( 1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof( float ),
+	                       reinterpret_cast< void* >( 2 * sizeof( float ) ) );
+
+	const int frames = singleFrame ? 1 : int( seconds * float( fps ) );
+	std::vector< uint8_t > px( size_t( w ) * size_t( h ) * 4 );
+
+	// A still is a moment in the same timeline, so the sim still has to be
+	// played up to it -- posing a game by hand would produce arrangements the
+	// rules cannot actually reach.
+	const float stillAt = singleFrame ? seconds : 0.0f;
+	const int simFrames = singleFrame ? int( stillAt * float( fps ) ) : 0;
+
+	for( int i = 0; i <= ( singleFrame ? simFrames : frames - 1 ); ++i )
+	{
+		const float t = float( i ) / float( fps );
+		const Look L  = LookAt( cues, t );
+
+		const int want = std::clamp( int( std::lround( L.game ) ), 0, int( GameId::Count ) - 1 );
+		if( want != currentGame )
+		{
+			sim.SetGame( GameId( want ) );
+			currentGame = want;
+		}
+
+		GameConfig cfg;
+		const Aspect asp = Aspect( std::clamp( int( std::lround( L.aspect ) ), 0,
+		                                       int( Aspect::Count ) - 1 ) );
+		cfg.gridW      = GridWidth( L.grid );
+		cfg.gridH      = GridHeight( cfg.gridW, asp );
+		cfg.seed       = SeedValue( L.seed );
+		cfg.speed      = L.speed;
+		cfg.skill      = L.skill;
+		cfg.difficulty = L.difficulty;
+		cfg.autopilot  = true;
+
+		sim.Configure( cfg );
+		sim.Advance( double( t ), in );
+
+		if( singleFrame && i < simFrames )
+			continue;
+
+		const Grid& grid = sim.Playfield();
+		glBindTexture( GL_TEXTURE_2D, cellTex );
+		glPixelStorei( GL_UNPACK_ALIGNMENT, 4 );
+		if( grid.Width() != texW || grid.Height() != texH )
+		{
+			glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8UI, grid.Width(), grid.Height(), 0,
+			              GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, grid.Data() );
+			texW = grid.Width();
+			texH = grid.Height();
+		}
+		else
+		{
+			glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, grid.Width(), grid.Height(),
+			                 GL_RGBA_INTEGER, GL_UNSIGNED_BYTE, grid.Data() );
+		}
+
+		glBindFramebuffer( GL_FRAMEBUFFER, fbo );
+		glViewport( 0, 0, w, h );
+		glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+		glClear( GL_COLOR_BUFFER_BIT );
+
+		glUseProgram( prog );
+		SetF2( prog, "GridSize", float( grid.Width() ), float( grid.Height() ) );
+		SetF2( prog, "Resolution", float( w ), float( h ) );
+		SetI( prog, "FitMode", std::clamp( int( std::lround( L.fit ) ), 0, 2 ) );
+		SetI( prog, "PaletteMode", std::clamp( int( std::lround( L.palette ) ), 0,
+		                                       int( Palette::Count ) - 1 ) );
+		SetF( prog, "CellRound", L.round );
+		SetF( prog, "CellGap", L.gap );
+		SetF( prog, "Glow", L.glow );
+		SetF( prog, "Scanline", L.scan );
+		SetF( prog, "Reactive", L.react );
+		SetF( prog, "Intensity", sim.Intensity() );
+		SetF4( prog, "BackColor", L.backR, L.backG, L.backB, L.backA );
+		SetI( prog, "CellTexture", 0 );
+
+		glActiveTexture( GL_TEXTURE0 );
+		glBindTexture( GL_TEXTURE_2D, cellTex );
+		glBindVertexArray( vao );
+		glDrawArrays( GL_TRIANGLE_STRIP, 0, 4 );
+		glFinish();
+		glReadPixels( 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data() );
+
+		char name[ 512 ];
+		if( singleFrame )
+			std::snprintf( name, sizeof( name ), "%s", singleFrame );
+		else
+			std::snprintf( name, sizeof( name ), "%s/frame-%05d.ppm", outDir, i );
+
+		WritePPM( name, px, w, h );
+	}
+
+	glDeleteBuffers( 1, &vbo );
+	glDeleteVertexArrays( 1, &vao );
+	glDeleteFramebuffers( 1, &fbo );
+	glDeleteTextures( 1, &colour );
+	glDeleteTextures( 1, &cellTex );
+
+	return frames;
+}
+
 } // namespace
 
 int main( int argc, char** argv )
 {
 	bool dump = false;
+	const char* seqDir  = nullptr;
+	const char* script  = nullptr;
+	const char* still   = nullptr;
+	int outW = 1920, outH = 1080, fps = 30;
+	float seconds = 45.0f;
+
 	for( int i = 1; i < argc; ++i )
-		if( std::strcmp( argv[ i ], "--dump" ) == 0 )
+	{
+		const char* a = argv[ i ];
+		if( std::strcmp( a, "--dump" ) == 0 )
 			dump = true;
+		else if( std::strcmp( a, "--sequence" ) == 0 && i + 1 < argc )
+			seqDir = argv[ ++i ];
+		else if( std::strcmp( a, "--still" ) == 0 && i + 1 < argc )
+			still = argv[ ++i ];
+		else if( std::strcmp( a, "--script" ) == 0 && i + 1 < argc )
+			script = argv[ ++i ];
+		else if( std::strcmp( a, "--seconds" ) == 0 && i + 1 < argc )
+			seconds = std::stof( argv[ ++i ] );
+		else if( std::strcmp( a, "--fps" ) == 0 && i + 1 < argc )
+			fps = std::stoi( argv[ ++i ] );
+		else if( std::strcmp( a, "--size" ) == 0 && i + 1 < argc )
+		{
+			const std::string s = argv[ ++i ];
+			const size_t x      = s.find( 'x' );
+			if( x != std::string::npos )
+			{
+				outW = std::stoi( s.substr( 0, x ) );
+				outH = std::stoi( s.substr( x + 1 ) );
+			}
+		}
+	}
+
+	if( seqDir || still )
+	{
+		CGLContextObj ctx = MakeContext();
+		if( ctx == nullptr )
+		{
+			std::printf( "could not create a headless GL context\n" );
+			return 1;
+		}
+
+		std::string log;
+		const GLuint prog = BuildProgram( false, log );
+		if( prog == 0 )
+		{
+			std::printf( "shader would not compile:\n%s\n", log.c_str() );
+			CGLDestroyContext( ctx );
+			return 1;
+		}
+
+		std::vector< Cue > cues;
+		if( script && !LoadCues( script, cues ) )
+		{
+			std::printf( "could not read cue script %s\n", script );
+			CGLDestroyContext( ctx );
+			return 1;
+		}
+
+		const int n = RenderSequence( prog, cues, seqDir, outW, outH, seconds, fps, still );
+		std::printf( "%s: %d frame(s) at %dx%d\n", still ? still : seqDir, n, outW, outH );
+
+		glDeleteProgram( prog );
+		CGLDestroyContext( ctx );
+		return 0;
+	}
 
 	std::printf( "coinopgl -- shader and cell-texture harness\n\n" );
 
