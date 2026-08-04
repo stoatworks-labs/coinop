@@ -66,7 +66,10 @@ or OSC-map any of them. So every control is a parameter:
 | **Skill** | How competent the autopilot is. At 1.0 it plays a long game. |
 | **Seed** | Same seed, same game. |
 
-## Build
+<!-- downloads:start -->
+<!-- downloads:end -->
+
+## Build from source
 
 ```bash
 git clone --recursive https://github.com/stoatworks-labs/coinop
