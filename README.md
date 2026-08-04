@@ -131,6 +131,10 @@ Not verified: the plugin has never been loaded into Resolume, the FFGL parameter
 and clock plumbing is the part no harness here reaches, and the Windows build
 has never been compiled.
 
+<!-- attributions:start -->
+This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
+<!-- attributions:end -->
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
