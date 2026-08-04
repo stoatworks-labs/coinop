@@ -1,0 +1,11 @@
+{
+  "name": "coinop",
+  "version-string": "0.1.0",
+  "description": "Dependencies for building the Coinop FFGL plugins. GLEW is only needed on Windows; macOS uses the system OpenGL framework. The simulation itself has no dependencies at all.",
+  "dependencies": [
+    {
+      "name": "glew",
+      "platform": "!osx"
+    }
+  ]
+}
