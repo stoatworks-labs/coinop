@@ -77,8 +77,8 @@ or OSC-map any of them. So every control is a parameter:
 
 | Build | Download | Size |
 | --- | --- | --- |
-| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-0.1.0-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v0.1.0/coinop-0.1.0-macos-universal.dmg) | 674 KB |
-| Universal (Apple Silicon + Intel) · .zip archive | [`coinop-macos-universal.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-macos-universal.zip) | 385 KB |
+| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-0.1.0-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v0.1.0/coinop-0.1.0-macos-universal.dmg) | 712 KB |
+| Universal (Apple Silicon + Intel) · .zip archive | [`coinop-macos-universal.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-macos-universal.zip) | 419 KB |
 
 </details>
 
@@ -94,7 +94,7 @@ or OSC-map any of them. So every control is a parameter:
 
 All builds, checksums and release notes: [github.com/stoatworks-labs/coinop/releases](https://github.com/stoatworks-labs/coinop/releases).
 
-The Windows builds are unsigned, so SmartScreen warns once.
+macOS builds are signed and notarised and open normally. The Windows builds are unsigned, so SmartScreen warns once.
 
 <!-- downloads:end -->
 
