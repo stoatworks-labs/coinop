@@ -80,4 +80,16 @@ step "Shader (coinopgl)"
 #---------------------------------------------------------------------------
 "$BUILD/coinopgl"
 
+#---------------------------------------------------------------------------
+step "Browser demo"
+#---------------------------------------------------------------------------
+# demo/plugin.js carries this repo's shader text a second time, because a web
+# page cannot include a C++ file. A change to Shaders.cpp that is not mirrored
+# there is invisible until the demo behaves unlike the plugin.
+#
+# Nothing checks the ported SIMULATION, and that gap is larger here than in the
+# other demos: the games are reimplemented in JavaScript, so coinoptest's
+# assertions do not reach them.
+python3 demo/tools/check_shaders.py
+
 printf '\n\033[32mAll checks passed.\033[0m\n'
