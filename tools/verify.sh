@@ -66,7 +66,14 @@ step "plugMain"
 # holding CFFGLPluginInfo. Both symbols are checked for that reason.
 for bundle in "Coinop" "Coinop Over"; do
 	bin="$BUILD/$bundle.bundle/Contents/MacOS/$bundle"
-	nm -gU "$bin" | grep -q plugMain || fail "$bundle: plugMain not exported"
+	# Captured, then matched from a herestring -- never `nm ... | grep -q`.
+	# Under `set -o pipefail` a `grep -q` that finds its match exits
+	# immediately, the writer upstream takes SIGPIPE, and the PIPELINE
+	# reports failure even though the symbol is there. It is output-size
+	# dependent, so it fires on the bigger binary first and looks
+	# intermittent. A herestring is not a pipeline, so nothing can SIGPIPE.
+	symbols=$( nm -gU "$bin" 2>/dev/null || true )
+	grep -q plugMain <<<"$symbols" || fail "$bundle: plugMain not exported"
 	echo "ok   $bundle: plugMain exported"
 done
 
