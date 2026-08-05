@@ -93,10 +93,22 @@ step "Browser demo"
 # demo/plugin.js carries this repo's shader text a second time, because a web
 # page cannot include a C++ file. A change to Shaders.cpp that is not mirrored
 # there is invisible until the demo behaves unlike the plugin.
-#
-# Nothing checks the ported SIMULATION, and that gap is larger here than in the
-# other demos: the games are reimplemented in JavaScript, so coinoptest's
-# assertions do not reach them.
 python3 demo/tools/check_shaders.py
+
+# And the ported SIMULATION, which is the larger gap here than in the other
+# demos: the games are reimplemented in JavaScript, so coinoptest's assertions
+# cannot reach them. `coinoptest --grid` runs every game under one fully
+# specified configuration and prints a digest of the playfield; check_sim.mjs
+# drives the JavaScript through the same sequence and diffs it.
+#
+# This is not decoration. It found the Snake tail gradient sitting one shade
+# level bright on two cells, because the C++ casts to uint8_t (truncating) and
+# the port used Math.round — invisible on screen, and exactly the kind of drift
+# that makes a demo stop being evidence about the plugin.
+if command -v node > /dev/null 2>&1; then
+	node demo/tools/check_sim.mjs
+else
+	printf '   --    node not installed, skipping the ported-simulation check\n'
+fi
 
 printf '\n\033[32mAll checks passed.\033[0m\n'

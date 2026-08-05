@@ -775,13 +775,142 @@ void TestAllGames()
 	}
 }
 
+//---------------------------------------------------------------------------
+// --grid: the playfield, as numbers a second implementation can be held to.
+//
+// Everything above asserts on behaviour, which is the right shape for catching
+// a broken game but the wrong shape for catching a broken *port*. The browser
+// demo re-implements every one of these games in JavaScript, and nothing was
+// able to say whether that re-implementation agreed with this one -- a port
+// that draws a plausible game is the exact failure the rest of this harness
+// exists to prevent.
+//
+// So: run each game under a fixed, fully specified configuration and print the
+// resulting grid as a digest plus a per-type census. `demo/tools/check_sim.mjs`
+// reproduces this from the ported JavaScript and diffs it.
+//
+// The configuration is coinopgl's, deliberately -- same grid, same seed, same
+// skill, same 400 frames of 20 ms -- so the two harnesses describe the same
+// instant of the same game and can be read against each other.
+//
+// FNV-1a over the raw cell bytes. The census is printed as well because a bare
+// hash that differs tells you nothing about HOW, and the first question on a
+// mismatch is always "is it one cell or is it a different game".
+//---------------------------------------------------------------------------
+/// The whole playfield as type digits, one row per line, for eyeballing a
+/// mismatch that the digest has already found. Row 0 is the top, as stored.
+bool gGridMap = false;
+
+void DumpGrids()
+{
+	std::printf( "grid  32x24  seed 7  skill 0.70  autopilot  400 frames x 20 ms\n" );
+
+	for( unsigned i = 0; i < unsigned( GameId::Count ); ++i )
+	{
+		const GameId id = GameId( i );
+
+		Sim sim;
+		Input in;
+		GameConfig cfg;
+		cfg.gridW     = 32;
+		cfg.gridH     = 24;
+		cfg.seed      = 7;
+		cfg.skill     = 0.7f;
+		cfg.autopilot = true;
+
+		sim.SetGame( id );
+		sim.Configure( cfg );
+
+		double clock = 0.0;
+		for( int f = 0; f < 400; ++f )
+		{
+			clock += 0.02;
+			sim.Advance( clock, in );
+		}
+
+		const Grid& grid = sim.Playfield();
+
+		// FNV-1a, 64-bit, over exactly the bytes that reach the texture.
+		uint64_t hash        = 14695981039346656037ULL;
+		const uint8_t* bytes = grid.Data();
+		for( size_t b = 0; b < grid.ByteCount(); ++b )
+		{
+			hash ^= bytes[ b ];
+			hash *= 1099511628211ULL;
+		}
+
+		int census[ int( Cell::Count ) ] = {};
+		for( int y = 0; y < grid.Height(); ++y )
+			for( int x = 0; x < grid.Width(); ++x )
+			{
+				const int t = int( grid.TypeAt( x, y ) );
+				if( t >= 0 && t < int( Cell::Count ) )
+					++census[ t ];
+			}
+
+		// Per-plane sums as well as the digest. A digest that differs says
+		// nothing about WHERE, and the four bytes fail for very different
+		// reasons: `type` is the game's logic, `shade` and `tint` are its
+		// presentation, and `flash` is written by the plugin rather than the sim
+		// and should be zero throughout a harness run. Localising the plane is
+		// the difference between "the port plays a different game" and "the port
+		// shades the snake's tail differently".
+		unsigned long long planeShade = 0, planeTint = 0, planeFlash = 0;
+		for( size_t b = 0; b < grid.ByteCount(); b += 4 )
+		{
+			planeShade += bytes[ b + 1 ];
+			planeTint += bytes[ b + 2 ];
+			planeFlash += bytes[ b + 3 ];
+		}
+
+		std::printf( "%-10s hash %016llx  ticks %llu  planes %llu %llu %llu  cells",
+		             GameName( id ), ( unsigned long long )hash,
+		             ( unsigned long long )sim.TicksRun(),
+		             planeShade, planeTint, planeFlash );
+		for( int t = 0; t < int( Cell::Count ); ++t )
+			std::printf( " %d", census[ t ] );
+		std::printf( "\n" );
+
+		if( gGridMap )
+			for( int y = 0; y < grid.Height(); ++y )
+			{
+				std::printf( "  %-8s %02d ", GameName( id ), y );
+				for( int x = 0; x < grid.Width(); ++x )
+					std::printf( "%d", int( grid.TypeAt( x, y ) ) );
+				std::printf( "  shade " );
+				for( int x = 0; x < grid.Width(); ++x )
+					std::printf( "%02x", grid.Get( x, y ).shade );
+				std::printf( "  tint " );
+				for( int x = 0; x < grid.Width(); ++x )
+					std::printf( "%02x", grid.Get( x, y ).tint );
+				std::printf( "\n" );
+			}
+	}
+}
+
 } // namespace
 
 int main( int argc, char** argv )
 {
+	bool dumpGrid = false;
 	for( int i = 1; i < argc; ++i )
+	{
 		if( std::strcmp( argv[ i ], "--verbose" ) == 0 )
 			gVerbose = true;
+		if( std::strcmp( argv[ i ], "--grid" ) == 0 )
+			dumpGrid = true;
+		if( std::strcmp( argv[ i ], "--grid-map" ) == 0 )
+		{
+			dumpGrid = true;
+			gGridMap = true;
+		}
+	}
+
+	if( dumpGrid )
+	{
+		DumpGrids();
+		return 0;
+	}
 
 	std::printf( "coinoptest -- simulation harness, no GL context\n" );
 

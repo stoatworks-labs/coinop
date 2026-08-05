@@ -872,7 +872,12 @@ class Snake {
     const n = this.body.length;
     for (let i = n - 1; i >= 0; i -= 1) {
       const t = n > 1 ? i / (n - 1) : 0;
-      const shade = Math.round(255 * (1 - t));
+      // TRUNCATE, not round. The C++ is `uint8_t( 255.0f * ( 1.0f - t ) )`, and
+      // a C cast to an integer type truncates toward zero — so a segment landing
+      // on 127.5 is 127 there and would be 128 here under Math.round. Two cells
+      // of the tail gradient, one shade level apart, invisible on screen and
+      // caught only by demo/tools/check_sim.mjs diffing the raw cell bytes.
+      const shade = Math.trunc(255 * (1 - t));
       grid.set(this.body[i].x, this.body[i].y, i === 0 ? Cell.Head : Cell.Body, shade);
     }
   }
@@ -1579,12 +1584,23 @@ class CoinopRenderer {
 }
 
 //===========================================================================
+// Exported for demo/tools/check_sim.mjs, which drives the ported games under
+// Node and compares the resulting playfield against `coinoptest --grid`.
+// Nothing else imports these.
+//===========================================================================
+
+export { Sim, Grid, Cell, Rng, Input, GAMES, GAME_NAMES, PORTED_GAME_NAMES };
+
+//===========================================================================
 // The page.
+//
+// Guarded, because check_sim.mjs imports this module under Node where there is
+// no window and nothing to mount.
 //===========================================================================
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 
-mountDemo({
+const DEMO = {
   name: 'Coinop',
   pluginId: 'CO01',
   tagline: 'Arcade games running inside the composition — playable, or left to the autopilot.',
@@ -1697,4 +1713,6 @@ mountDemo({
   ],
 
   createRenderer: (gl, quad) => new CoinopRenderer(gl, quad),
-});
+};
+
+if (typeof window !== 'undefined') mountDemo(DEMO);
