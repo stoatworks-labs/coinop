@@ -1262,11 +1262,1070 @@ class Bricks {
   }
 }
 
+//===========================================================================
+// Port of source/games/Rally.cpp
+//
+// The only game of the five with no built-in failure state: two competent
+// paddles rally forever, and a layer that never resets stops being interesting
+// after ninety seconds. So there is a target score, and neither paddle may be
+// perfect — the error floor is non-zero even at Skill 1.0, so a long enough
+// rally eventually produces a miss and somebody wins.
+//
+// Two-player is the reason the input model is what it is: the left paddle takes
+// the Axis parameter, the right takes Up/Down. Map a fader to one and two pads
+// to the other and two people play from one instance.
+//===========================================================================
+
+const RALLY_TARGET = 7;
+
+class Rally {
+  tickHz() {
+    return 90;
+  }
+
+  reset(cfg, rng) {
+    this.w = cfg.gridW;
+    this.h = cfg.gridH;
+
+    this.half = Math.max(1.5, this.h * 0.11);
+    this.paddleL = this.h * 0.5;
+    this.paddleR = this.h * 0.5;
+    this.targetL = this.paddleL;
+    this.targetR = this.paddleR;
+
+    this.scoreL = 0;
+    this.scoreR = 0;
+    this.rally = 0;
+    this.flash = 0;
+    this.cooldownL = 0;
+    this.cooldownR = 0;
+    this.serveDelay = 0;
+    this.ball = { x: 0, y: 0 };
+    this.vel = { x: 0, y: 0 };
+
+    this.serve(rng, rng.chance(0.5) ? -1 : 1);
+  }
+
+  serve(rng, toward) {
+    this.ball = { x: this.w * 0.5, y: this.h * 0.5 };
+
+    // Angle kept well off horizontal and well off vertical: a near-horizontal
+    // serve is a straight line nobody has to move for, and a near-vertical one
+    // bounces off the top and bottom without crossing the court.
+    const angle = rng.range(0.35, 0.85) * (rng.chance(0.5) ? 1 : -1);
+    this.vel = { x: Math.cos(angle) * toward, y: Math.sin(angle) };
+
+    this.serveDelay = 40;
+    this.rally = 0;
+  }
+
+  predictY(atX) {
+    if (Math.abs(this.vel.x) < 0.0001) return this.ball.y;
+
+    const dist = (atX - this.ball.x) / this.vel.x;
+    if (dist <= 0) return this.h * 0.5;
+
+    // Triangle-wave fold, same trick as Bricks: repeated reflections off the top
+    // and bottom walls are exactly a fold of the unbounded straight line.
+    const y = this.ball.y + this.vel.y * dist;
+    const lo = 1;
+    const hi = this.h - 1;
+    const span = Math.max(1, hi - lo);
+
+    let t = (y - lo) % (span * 2);
+    if (t < 0) t += span * 2;
+    if (t > span) t = span * 2 - t;
+
+    return lo + t;
+  }
+
+  /// `side` is -1 for the left paddle, +1 for the right. Returns the new y.
+  drivePaddle(y, which, cfg, rng, side) {
+    const skill = clamp01(cfg.skill);
+    const dt = 1 / this.tickHz(cfg);
+
+    // Only re-aim when the ball is coming this way. A paddle that tracks a
+    // receding ball looks like it is following a magnet rather than playing.
+    const incoming = (side < 0 && this.vel.x < 0) || (side > 0 && this.vel.x > 0);
+
+    const cdKey = which === 'L' ? 'cooldownL' : 'cooldownR';
+    const tKey = which === 'L' ? 'targetL' : 'targetR';
+
+    this[cdKey] -= 1;
+    if (this[cdKey] <= 0) {
+      this[cdKey] = Math.trunc(2 + (1 - skill) * 16);
+
+      if (incoming) {
+        const wall = side < 0 ? 2 : this.w - 3;
+
+        // The error floor is what makes the match end. Even at Skill 1.0 this is
+        // non-zero, so a long enough rally eventually produces a miss.
+        const err = (0.12 + (1 - skill) * 2.4) * this.half;
+        this[tKey] = this.predictY(wall) + rng.range(-err, err);
+      } else {
+        // Drift back toward the middle between rallies.
+        this[tKey] = this.h * 0.5;
+      }
+    }
+
+    const maxStep = (10 + skill * 24) * dt;
+    let next = y + clamp(this[tKey] - y, -maxStep, maxStep);
+    next = clamp(next, this.half + 1, this.h - 1 - this.half);
+    return next;
+  }
+
+  step(cfg, input, rng) {
+    if (this.finished()) return;
+
+    if (this.flash > 0) this.flash = this.flash > 20 ? this.flash - 20 : 0;
+
+    const dt = 1 / this.tickHz(cfg);
+
+    // --- Paddles --------------------------------------------------------
+    if (cfg.autopilot) {
+      this.paddleL = this.drivePaddle(this.paddleL, 'L', cfg, rng, -1);
+      this.paddleR = this.drivePaddle(this.paddleR, 'R', cfg, rng, 1);
+    } else {
+      // Left paddle: the Axis parameter, i.e. a fader.
+      const want = clamp01(input.axis);
+      this.paddleL = this.half + 1 + want * (this.h - 2 - 2 * this.half);
+
+      // Right paddle: Up/Down. Two players, one plugin instance.
+      for (let b = input.pop(); b !== null; b = input.pop()) {
+        if (b === Button.Up) this.paddleR -= 1.5;
+        else if (b === Button.Down) this.paddleR += 1.5;
+      }
+
+      if (input.isHeld(Button.Up)) this.paddleR -= 40 * dt;
+      if (input.isHeld(Button.Down)) this.paddleR += 40 * dt;
+
+      this.paddleR = clamp(this.paddleR, this.half + 1, this.h - 1 - this.half);
+    }
+
+    if (this.serveDelay > 0) {
+      this.serveDelay -= 1;
+      return;
+    }
+
+    // --- Ball -----------------------------------------------------------
+    const speed = (10 + cfg.speed * 24) * (0.7 + cfg.difficulty * 0.8) * (1 + this.rally * 0.02);
+    let remaining = speed * dt;
+
+    while (remaining > 0) {
+      const stepLen = Math.min(remaining, 0.25);
+      remaining -= stepLen;
+
+      const vlen = Math.sqrt(this.vel.x * this.vel.x + this.vel.y * this.vel.y);
+      if (vlen < 0.0001) break;
+
+      this.ball.x += (this.vel.x / vlen) * stepLen;
+      this.ball.y += (this.vel.y / vlen) * stepLen;
+
+      if (this.ball.y < 1) {
+        this.ball.y = 1;
+        this.vel.y = Math.abs(this.vel.y);
+      } else if (this.ball.y > this.h - 1) {
+        this.ball.y = this.h - 1;
+        this.vel.y = -Math.abs(this.vel.y);
+      }
+
+      // Paddle faces sit one cell in from each wall.
+      const faceL = 2;
+      const faceR = this.w - 3;
+
+      if (this.vel.x < 0 && this.ball.x <= faceL) {
+        if (Math.abs(this.ball.y - this.paddleL) <= this.half + 0.5) {
+          this.ball.x = faceL;
+          const offset = clamp((this.ball.y - this.paddleL) / this.half, -1, 1);
+          this.vel = { x: Math.abs(this.vel.x), y: offset * 0.9 };
+          this.rally += 1;
+          this.flash = 255;
+        }
+      } else if (this.vel.x > 0 && this.ball.x >= faceR) {
+        if (Math.abs(this.ball.y - this.paddleR) <= this.half + 0.5) {
+          this.ball.x = faceR;
+          const offset = clamp((this.ball.y - this.paddleR) / this.half, -1, 1);
+          this.vel = { x: -Math.abs(this.vel.x), y: offset * 0.9 };
+          this.rally += 1;
+          this.flash = 255;
+        }
+      }
+
+      if (this.ball.x < 0) {
+        this.scoreR += 1;
+        this.serve(rng, 1);
+        return;
+      }
+      if (this.ball.x > this.w) {
+        this.scoreL += 1;
+        this.serve(rng, -1);
+        return;
+      }
+    }
+  }
+
+  draw(cfg, grid) {
+    grid.clear();
+
+    for (let x = 0; x < this.w; x += 1) {
+      grid.set(x, 0, Cell.Wall);
+      grid.set(x, this.h - 1, Cell.Wall);
+    }
+
+    // Centre line, dashed. Costs four lines and is most of what makes it read as
+    // a court rather than as two bars and a dot.
+    for (let y = 1; y < this.h - 1; y += 2) {
+      grid.set(Math.floor(this.w / 2), y, Cell.Wall, 90);
+    }
+
+    const lo = Math.floor(-this.half);
+    const hi = Math.ceil(this.half);
+
+    for (let k = lo; k <= hi; k += 1) {
+      grid.set(1, Math.floor(this.paddleL) + k, Cell.Paddle, 255, 0);
+      grid.set(this.w - 2, Math.floor(this.paddleR) + k, Cell.Paddle, 255, 3);
+    }
+
+    grid.set(Math.floor(this.ball.x), Math.floor(this.ball.y), Cell.Ball, 255);
+  }
+
+  finished() {
+    return this.scoreL >= RALLY_TARGET || this.scoreR >= RALLY_TARGET;
+  }
+
+  /// Climbs through a rally and spikes on each return.
+  intensity() {
+    return Math.min(1, this.rally * 0.05 + (this.flash / 255) * 0.5);
+  }
+}
+
+/**
+ * Port of source/games/Marchers.{h,cpp} — a formation that steps down the
+ * screen while you shoot up at it.
+ *
+ * The best grid fit of the five: the formation genuinely is a rectangular array
+ * moving in whole-cell steps, so unlike Bricks there is nothing continuous to
+ * reconcile against the cells.
+ *
+ * THE TICK RATE IS THE DIFFICULTY. The original's famous acceleration was an
+ * accident of hardware — the machine redrew every alien every frame, so as they
+ * died the survivors sped up. It is reproduced deliberately here: the march
+ * interval is a function of how many are left, because "the last one moves fast"
+ * is the whole character of the game.
+ *
+ * BOMBS COME FROM THE BOTTOM OF A COLUMN, not from anywhere. Picking a random
+ * live invader lets one shoot through the two rows beneath it, which looks like
+ * a bug even to someone who has never seen the original.
+ */
+class Marchers {
+  /// Shots and the cannon want a smooth rate; the formation marches on a
+  /// counter underneath it rather than on its own clock.
+  tickHz(cfg) {
+    return 20 + clamp01(cfg.speed) * 40;
+  }
+
+  reset(cfg, rng) {
+    void rng;
+    this.w = cfg.gridW;
+    this.h = cfg.gridH;
+
+    this.scoreValue = 0;
+    this.lives = 3;
+    this.wave = 0;
+    this.landed = false;
+    this.cannonX = Math.trunc(this.w / 2);
+    this.hitFlash = 0;
+
+    this.aiCooldown = 0;
+
+    this.buildWave(cfg);
+  }
+
+  buildWave(cfg) {
+    // Two cells per invader horizontally so they read as objects rather than as
+    // a solid block at low grid sizes.
+    this.cols = clamp(Math.trunc((this.w - 4) / 2), 3, 11);
+    this.rows = clamp(3 + Math.trunc(cfg.difficulty * 3), 3, Math.max(3, Math.trunc((this.h - 8) / 2)));
+
+    this.alive = new Uint8Array(this.cols * this.rows).fill(1);
+
+    this.offsetX = 1;
+    this.offsetY = 1 + Math.min(this.wave, 4); // Each wave starts lower.
+    this.marchDir = 1;
+    this.marchTimer = 0;
+
+    this.bullet = { x: 0, y: 0, vy: 0, live: false };
+    this.bombs = [];
+  }
+
+  index(col, row) { return row * this.cols + col; }
+
+  aliveAt(col, row) {
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return false;
+    return this.alive[this.index(col, row)] !== 0;
+  }
+
+  aliveCount() {
+    let n = 0;
+    for (let i = 0; i < this.alive.length; i += 1) n += this.alive[i] ? 1 : 0;
+    return n;
+  }
+
+  lowestInColumn(col) {
+    for (let row = this.rows - 1; row >= 0; row -= 1) {
+      if (this.aliveAt(col, row)) return row;
+    }
+    return -1;
+  }
+
+  formationLeft() {
+    for (let col = 0; col < this.cols; col += 1) {
+      for (let row = 0; row < this.rows; row += 1) {
+        if (this.aliveAt(col, row)) return this.offsetX + col * 2;
+      }
+    }
+    return this.offsetX;
+  }
+
+  formationRight() {
+    for (let col = this.cols - 1; col >= 0; col -= 1) {
+      for (let row = 0; row < this.rows; row += 1) {
+        if (this.aliveAt(col, row)) return this.offsetX + col * 2;
+      }
+    }
+    return this.offsetX;
+  }
+
+  marchStep() {
+    const left = this.formationLeft();
+    const right = this.formationRight();
+
+    if ((this.marchDir > 0 && right + 1 >= this.w - 1) || (this.marchDir < 0 && left - 1 <= 0)) {
+      this.marchDir = -this.marchDir;
+      this.offsetY += 1;
+    } else {
+      this.offsetX += this.marchDir;
+    }
+
+    // Landed. Not a life lost — the game is simply over, as it should be.
+    for (let col = 0; col < this.cols; col += 1) {
+      const row = this.lowestInColumn(col);
+      if (row >= 0 && this.offsetY + row >= this.h - 3) {
+        this.landed = true;
+        return;
+      }
+    }
+  }
+
+  step(cfg, input, rng) {
+    if (this.finished()) return;
+
+    if (this.hitFlash > 0) this.hitFlash -= 1;
+
+    const hz = this.tickHz(cfg);
+    const dt = 1 / hz;
+    const cannonY = this.h - 2;
+
+    // --- March timer ------------------------------------------------------
+    //
+    // The acceleration. Interval falls with the survivor count, so the last
+    // invader moves several times faster than a full formation.
+    const total = Math.max(1, this.alive.length);
+    const alive = Math.max(1, this.aliveCount());
+    const frac = alive / total;
+    const interval = Math.max(1, Math.trunc((2 + 16 * frac) / (0.6 + cfg.difficulty)));
+
+    this.marchTimer += 1;
+    if (this.marchTimer >= interval) {
+      this.marchTimer = 0;
+      this.marchStep();
+      if (this.landed) return;
+    }
+
+    // --- Cannon -----------------------------------------------------------
+    let wantFire = false;
+
+    if (cfg.autopilot) {
+      const skill = clamp01(cfg.skill);
+
+      this.aiCooldown -= 1;
+      if (this.aiCooldown <= 0) {
+        this.aiCooldown = Math.trunc(1 + (1 - skill) * 8);
+
+        // Aim at the lowest-hanging column — the one that will land first and
+        // the one most likely to be shooting back.
+        let bestCol = -1;
+        let bestRow = -1;
+        for (let col = 0; col < this.cols; col += 1) {
+          const row = this.lowestInColumn(col);
+          if (row > bestRow) {
+            bestRow = row;
+            bestCol = col;
+          }
+        }
+
+        let target = bestCol >= 0 ? this.offsetX + bestCol * 2 : this.cannonX;
+
+        // Dodging, at high skill only. A bomb in the cannon's column is worth
+        // stepping out of; a poor player does not notice.
+        for (const bomb of this.bombs) {
+          if (!bomb.live) continue;
+
+          if (Math.abs(bomb.x - this.cannonX) <= 1
+            && bomb.y > this.h * 0.4 && rng.chance(skill)) {
+            target = this.cannonX + (bomb.x <= this.cannonX ? 3 : -3);
+          }
+        }
+
+        // Aim error, so a low skill misses honestly rather than by refusing to
+        // shoot.
+        if (rng.chance(1 - skill)) target += Math.trunc(rng.range(-3, 3));
+
+        this.cannonX += (target > this.cannonX) ? 1 : (target < this.cannonX ? -1 : 0);
+      }
+
+      wantFire = !this.bullet.live && rng.chance(0.15 + skill * 0.35);
+    } else {
+      let b = input.pop();
+      while (b !== null) {
+        if (b === Button.Left) this.cannonX -= 1;
+        else if (b === Button.Right) this.cannonX += 1;
+        else if (b === Button.Fire) wantFire = true;
+        b = input.pop();
+      }
+
+      if (input.isHeld(Button.Left)) this.cannonX -= 1;
+      if (input.isHeld(Button.Right)) this.cannonX += 1;
+    }
+
+    this.cannonX = clamp(this.cannonX, 1, this.w - 2);
+
+    if (wantFire && !this.bullet.live) {
+      this.bullet.live = true;
+      this.bullet.x = this.cannonX;
+      this.bullet.y = cannonY - 1;
+      this.bullet.vy = -28;
+    }
+
+    // --- Player shot ------------------------------------------------------
+    if (this.bullet.live) {
+      // Substepped for the same tunnelling reason as the ball in Bricks: a fast
+      // shot must not step over the invader it should have hit.
+      let travel = Math.abs(this.bullet.vy) * dt;
+      while (travel > 0 && this.bullet.live) {
+        const stepLen = Math.min(travel, 0.5);
+        travel -= stepLen;
+        this.bullet.y -= stepLen;
+
+        if (this.bullet.y < 1) {
+          this.bullet.live = false;
+          break;
+        }
+
+        const row = Math.floor(this.bullet.y) - this.offsetY;
+        if (row >= 0 && row < this.rows) {
+          const col = this.bullet.x - this.offsetX;
+          if (col >= 0 && (col % 2) === 0 && Math.trunc(col / 2) < this.cols
+            && this.aliveAt(Math.trunc(col / 2), row)) {
+            this.alive[this.index(Math.trunc(col / 2), row)] = 0;
+            this.scoreValue += 10;
+            this.bullet.live = false;
+            this.hitFlash = 6;
+          }
+        }
+      }
+    }
+
+    // --- Bombs ------------------------------------------------------------
+    const bombChance = (0.01 + cfg.difficulty * 0.05) * (1 - frac * 0.5);
+    if (rng.chance(bombChance) && this.bombs.length < 12) {
+      const col = rng.below(this.cols);
+      const row = this.lowestInColumn(col);
+      if (row >= 0) {
+        this.bombs.push({
+          x: this.offsetX + col * 2,
+          y: this.offsetY + row + 1,
+          vy: 7 + cfg.difficulty * 9,
+          live: true,
+        });
+      }
+    }
+
+    for (const bomb of this.bombs) {
+      if (!bomb.live) continue;
+
+      bomb.y += bomb.vy * dt;
+
+      if (bomb.y >= cannonY && Math.abs(bomb.x - this.cannonX) <= 1) {
+        bomb.live = false;
+        this.lives -= 1;
+        this.hitFlash = 12;
+      } else if (bomb.y > this.h) {
+        bomb.live = false;
+      }
+    }
+
+    this.bombs = this.bombs.filter((s) => s.live);
+
+    // --- Wave clear -------------------------------------------------------
+    if (this.aliveCount() === 0) {
+      this.wave += 1;
+      this.scoreValue += 100;
+      this.buildWave(cfg);
+    }
+  }
+
+  draw(cfg, grid) {
+    void cfg;
+    grid.clear();
+
+    for (let y = 0; y < this.h; y += 1) {
+      grid.set(0, y, Cell.Wall);
+      grid.set(this.w - 1, y, Cell.Wall);
+    }
+    for (let x = 0; x < this.w; x += 1) grid.set(x, 0, Cell.Wall);
+
+    // Formation. Tint by row so the shader can colour the ranks differently.
+    for (let row = 0; row < this.rows; row += 1) {
+      for (let col = 0; col < this.cols; col += 1) {
+        if (!this.aliveAt(col, row)) continue;
+        grid.set(this.offsetX + col * 2, this.offsetY + row, Cell.Brick, 255, row % 6);
+      }
+    }
+
+    const cannonY = this.h - 2;
+    grid.set(this.cannonX, cannonY, Cell.Paddle, 255);
+    grid.set(this.cannonX - 1, cannonY, Cell.Paddle, 160);
+    grid.set(this.cannonX + 1, cannonY, Cell.Paddle, 160);
+    grid.set(this.cannonX, cannonY - 1, Cell.Paddle, 200);
+
+    if (this.bullet.live) {
+      grid.set(this.bullet.x, Math.floor(this.bullet.y), Cell.Ball, 255);
+    }
+
+    for (const bomb of this.bombs) {
+      if (bomb.live) grid.set(bomb.x, Math.floor(bomb.y), Cell.Food, 200);
+    }
+  }
+
+  score() { return this.scoreValue; }
+
+  finished() { return this.lives <= 0 || this.landed; }
+
+  intensity() {
+    if (this.alive.length === 0) return 0;
+    const cleared = 1 - this.aliveCount() / this.alive.length;
+    return Math.min(1, cleared * 0.8 + (this.hitFlash / 12) * 0.4);
+  }
+}
+
+//===========================================================================
+// Port of source/Raster.h — drawing vector shapes into a cell grid.
+//
+// WHY DRIFT IS A GRID GAME AT ALL. Asteroids was never a grid: a rotating ship,
+// a rock tumbling at 23 degrees, everything drifting at sub-cell speeds. The
+// obvious move is a second renderer with real antialiased GL lines, and it is
+// wrong twice — architecturally, because it means a second set of aspect-ratio
+// bugs and a shader that has to know which game is running; and for the actual
+// job, because a one-pixel antialiased line sampled onto a 30 mm pitch LED wall
+// lands between fixtures and disappears. A chunky rasterised line is the only
+// Asteroids that survives the trip to the lights.
+//
+// So state stays continuous and only the picture is discrete.
+//===========================================================================
+
+/**
+ * Integer Bresenham. Used rather than a float DDA because the grid is small and
+ * a DDA's rounding lets a near-horizontal line drop a cell here and there — on a
+ * 32-wide playfield a one-cell gap in a rock's outline is a hole you can see the
+ * background through.
+ */
+function drawLine(grid, x0, y0, x1, y1, type, shade = 255, tint = 0) {
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+
+  // A degenerate line is one cell, not an infinite loop. Two rocks that have
+  // drifted onto the same point produce exactly this.
+  for (let guard = 0; guard < 4096; guard += 1) {
+    grid.set(x0, y0, type, shade, tint);
+
+    if (x0 === x1 && y0 === y1) return;
+
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+}
+
+/**
+ * A closed polygon in playfield coordinates, wrapped at the edges.
+ *
+ * Wrapping is done by drawing the shape up to nine times at offset origins
+ * rather than by clipping each segment: a rock straddling the left edge has to
+ * appear on the right, and a rock in a corner in all four. Cheap redraws into a
+ * 3 KB grid are less code than a correct wrapping clipper, and `set` already
+ * drops what lands out of bounds.
+ */
+function drawPolyWrapped(grid, xs, ys, n, type, shade = 255, tint = 0) {
+  if (n < 2) return;
+
+  const w = grid.w;
+  const h = grid.h;
+
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      for (let i = 0; i < n; i += 1) {
+        const j = (i + 1) % n;
+
+        const x0 = Math.floor(xs[i]) + ox * w;
+        const y0 = Math.floor(ys[i]) + oy * h;
+        const x1 = Math.floor(xs[j]) + ox * w;
+        const y1 = Math.floor(ys[j]) + oy * h;
+
+        // Skip the offsets that cannot touch the grid, so a screen full of
+        // rocks is not nine times the work.
+        const loX = x0 < x1 ? x0 : x1;
+        const hiX = x0 < x1 ? x1 : x0;
+        const loY = y0 < y1 ? y0 : y1;
+        const hiY = y0 < y1 ? y1 : y0;
+        if (hiX < 0 || loX >= w || hiY < 0 || loY >= h) continue;
+
+        drawLine(grid, x0, y0, x1, y1, type, shade, tint);
+      }
+    }
+  }
+}
+
+/**
+ * Wrap a scalar into [0, extent).
+ *
+ * A plain remainder keeps the sign, so a ship that drifts off the left edge at
+ * -0.5 comes back as -0.5 and never reappears.
+ */
+function wrapF(v, extent) {
+  if (extent <= 0) return 0;
+  v %= extent;
+  return v < 0 ? v + extent : v;
+}
+
+/**
+ * Shortest signed distance from a to b on a wrapped axis.
+ *
+ * Needed by the autopilot: the nearest rock to a ship at x=1 may be at x=31, and
+ * a plain subtraction says it is thirty cells away and points the guns the wrong
+ * way.
+ */
+function wrapDelta(a, b, extent) {
+  let d = b - a;
+  while (d > extent * 0.5) d -= extent;
+  while (d < -extent * 0.5) d += extent;
+  return d;
+}
+
+/**
+ * Port of source/games/Drift.{h,cpp} — a ship with momentum, rocks that split,
+ * and a wrapping playfield.
+ *
+ * MOMENTUM IS THE GAME. The temptation with a ship on a grid is to make the
+ * controls positional — press left, move left. That is a different and much
+ * worse game. Rotation and thrust with no braking, drifting through your own
+ * previous velocity, is the whole character of it, and it is why the autopilot
+ * is mostly a problem of *not* accelerating.
+ *
+ * WRAPPED DISTANCE, EVERYWHERE. Every comparison between two things on this
+ * playfield goes through wrapDelta. A rock at x=31 on a 32-wide field is one
+ * cell from a ship at x=0, not thirty-one, and a plain subtraction gets that
+ * wrong in the two places it matters most: collision detection, which then
+ * misses, and target selection, which then aims at the wrong rock and turns the
+ * long way round to do it.
+ */
+const kDriftPi = 3.14159265358979323846;
+const kRockVerts = 8;
+
+class Drift {
+  tickHz() {
+    return 60;
+  }
+
+  reset(cfg, rng) {
+    this.w = cfg.gridW;
+    this.h = cfg.gridH;
+
+    this.scoreValue = 0;
+    this.lives = 3;
+    this.wave = 0;
+    this.hitFlash = 0;
+    this.fireCooldown = 0;
+    this.thrusting = false;
+
+    this.bullets = [];
+    this.rocks = [];
+    this.respawnShip();
+    this.spawnWave(cfg, rng);
+  }
+
+  respawnShip() {
+    this.ship = { x: this.w * 0.5, y: this.h * 0.5 };
+    this.shipVel = { x: 0, y: 0 };
+    this.angle = 0;
+
+    // Grace period. Respawning into the rock that just killed you, and losing
+    // the next life instantly, burns all three in under a second.
+    this.invulnTicks = 90;
+  }
+
+  makeRock(size, at, rng, cfg) {
+    const r = {
+      pos: { x: at.x, y: at.y },
+      vel: { x: 0, y: 0 },
+      ang: 0,
+      spin: 0,
+      radius: 1 + size * 1.6,
+      size,
+      shape: new Array(kRockVerts).fill(0),
+    };
+
+    r.ang = rng.range(0, kDriftPi * 2);
+    r.spin = rng.range(-1.4, 1.4);
+
+    const speed = (1.6 + (2 - size) * 1.1) * (0.5 + cfg.difficulty * 1.2);
+    const dir = rng.range(0, kDriftPi * 2);
+    r.vel = { x: Math.cos(dir) * speed, y: Math.sin(dir) * speed };
+
+    // A jagged silhouette. Perfectly circular rocks read as bubbles, and at this
+    // resolution the jaggedness is most of what says "rock".
+    for (let i = 0; i < kRockVerts; i += 1) r.shape[i] = rng.range(0.68, 1.25);
+
+    return r;
+  }
+
+  spawnWave(cfg, rng) {
+    const count = clamp(3 + this.wave + Math.trunc(cfg.difficulty * 3), 3, 9);
+
+    this.rocks = [];
+    for (let i = 0; i < count; i += 1) {
+      // Spawn clear of the centre, or a new wave can materialise on top of the
+      // ship before the player has moved.
+      let at = { x: 0, y: 0 };
+      for (let attempt = 0; attempt < 32; attempt += 1) {
+        at = { x: rng.range(0, this.w), y: rng.range(0, this.h) };
+
+        const dx = wrapDelta(at.x, this.ship.x, this.w);
+        const dy = wrapDelta(at.y, this.ship.y, this.h);
+        if (Math.sqrt(dx * dx + dy * dy) > Math.min(this.w, this.h) * 0.28) break;
+      }
+
+      this.rocks.push(this.makeRock(2, at, rng, cfg));
+    }
+  }
+
+  splitRock(index, rng, cfg) {
+    const parent = this.rocks[index];
+
+    this.rocks.splice(index, 1);
+    this.scoreValue += (3 - parent.size) * 20;
+    this.hitFlash = 8;
+
+    if (parent.size <= 0) return;
+
+    for (let i = 0; i < 2; i += 1) {
+      const child = this.makeRock(parent.size - 1, parent.pos, rng, cfg);
+
+      // Inherit some of the parent's momentum so the two halves visibly continue
+      // what the parent was doing, rather than scattering at random.
+      child.vel.x = child.vel.x * 0.7 + parent.vel.x * 0.6;
+      child.vel.y = child.vel.y * 0.7 + parent.vel.y * 0.6;
+      this.rocks.push(child);
+    }
+  }
+
+  /** Returns whether to fire. */
+  autopilot(cfg, rng) {
+    const skill = clamp01(cfg.skill);
+    const dt = 1 / this.tickHz(cfg);
+
+    // Nearest rock by wrapped distance.
+    let bestDist = 1e9;
+    let bestBear = 0;
+    let nearest = null;
+
+    for (const r of this.rocks) {
+      const dx = wrapDelta(this.ship.x, r.pos.x, this.w);
+      const dy = wrapDelta(this.ship.y, r.pos.y, this.h);
+      const d = Math.sqrt(dx * dx + dy * dy);
+
+      if (d < bestDist) {
+        bestDist = d;
+        // Screen y grows downward, so the bearing is atan2(dx, -dy) for an angle
+        // measured clockwise from up.
+        bestBear = Math.atan2(dx, -dy);
+        nearest = r;
+      }
+    }
+
+    if (!nearest) return false;
+
+    // Shortest signed turn onto the bearing.
+    let delta = bestBear - this.angle;
+    while (delta > kDriftPi) delta -= kDriftPi * 2;
+    while (delta < -kDriftPi) delta += kDriftPi * 2;
+
+    // Aim error, so a low skill sprays. Scaled by distance because misjudging a
+    // far rock is forgivable and misjudging a near one is what kills.
+    const aimErr = (1 - skill) * 0.5;
+    delta += rng.range(-aimErr, aimErr);
+
+    const turnRate = (2.2 + skill * 1.6) * dt;
+    this.angle += clamp(delta, -turnRate, turnRate);
+
+    // Fire when roughly on target. The tolerance loosens as skill drops, which
+    // makes a poor autopilot shoot more and hit less — the right shape.
+    let fire = Math.abs(delta) < (0.12 + (1 - skill) * 0.5);
+
+    // Evasion. Thrust away from anything close, but only if the autopilot is
+    // good enough to have noticed. This is the main thing Skill buys here: below
+    // about 0.5 the ship mostly sits still and gets hit.
+    this.thrusting = false;
+    if (bestDist < nearest.radius + 5 && rng.chance(skill)) {
+      const away = bestBear + kDriftPi;
+      let fleeDelta = away - this.angle;
+      while (fleeDelta > kDriftPi) fleeDelta -= kDriftPi * 2;
+      while (fleeDelta < -kDriftPi) fleeDelta += kDriftPi * 2;
+
+      this.angle += clamp(fleeDelta, -turnRate, turnRate);
+      this.thrusting = true;
+      fire = false;
+    } else if (Math.sqrt(this.shipVel.x * this.shipVel.x + this.shipVel.y * this.shipVel.y) < 0.5
+      && rng.chance(0.01)) {
+      // Occasional drift so a safe ship does not sit motionless in the middle of
+      // the screen for a whole wave.
+      this.thrusting = true;
+    }
+
+    return fire;
+  }
+
+  step(cfg, input, rng) {
+    if (this.finished()) return;
+
+    const dt = 1 / this.tickHz(cfg);
+
+    if (this.invulnTicks > 0) this.invulnTicks -= 1;
+    if (this.hitFlash > 0) this.hitFlash -= 1;
+    if (this.fireCooldown > 0) this.fireCooldown -= dt;
+
+    let fire = false;
+
+    if (cfg.autopilot) {
+      fire = this.autopilot(cfg, rng);
+    } else {
+      this.thrusting = input.isHeld(Button.Up);
+
+      const turnRate = 3.4 * dt;
+      if (input.isHeld(Button.Left)) this.angle -= turnRate;
+      if (input.isHeld(Button.Right)) this.angle += turnRate;
+
+      let b = input.pop();
+      while (b !== null) {
+        if (b === Button.Fire) fire = true;
+        else if (b === Button.Left) this.angle -= 0.25;
+        else if (b === Button.Right) this.angle += 0.25;
+        else if (b === Button.Up) this.thrusting = true;
+        b = input.pop();
+      }
+    }
+
+    // --- Ship -------------------------------------------------------------
+    if (this.thrusting) {
+      const accel = 14 * dt;
+      this.shipVel.x += Math.sin(this.angle) * accel;
+      this.shipVel.y += -Math.cos(this.angle) * accel;
+    }
+
+    // Drag, and a speed cap. No drag at all is more authentic and much less
+    // playable on a field this small — the ship reaches a speed where it crosses
+    // the playfield faster than anyone can react.
+    const drag = Math.pow(0.985, dt * 60);
+    this.shipVel.x *= drag;
+    this.shipVel.y *= drag;
+
+    const sp = Math.sqrt(this.shipVel.x * this.shipVel.x + this.shipVel.y * this.shipVel.y);
+    const maxSp = 16;
+    if (sp > maxSp) {
+      this.shipVel.x *= maxSp / sp;
+      this.shipVel.y *= maxSp / sp;
+    }
+
+    this.ship.x = wrapF(this.ship.x + this.shipVel.x * dt, this.w);
+    this.ship.y = wrapF(this.ship.y + this.shipVel.y * dt, this.h);
+
+    // --- Bullets ----------------------------------------------------------
+    if (fire && this.fireCooldown <= 0 && this.bullets.length < 6) {
+      const muzzle = 1.2;
+      this.bullets.push({
+        pos: {
+          x: wrapF(this.ship.x + Math.sin(this.angle) * muzzle, this.w),
+          y: wrapF(this.ship.y - Math.cos(this.angle) * muzzle, this.h),
+        },
+        vel: {
+          x: Math.sin(this.angle) * 26 + this.shipVel.x,
+          y: -Math.cos(this.angle) * 26 + this.shipVel.y,
+        },
+        life: 0.9,
+      });
+
+      this.fireCooldown = 0.18;
+    }
+
+    for (const b of this.bullets) {
+      b.life -= dt;
+      b.pos.x = wrapF(b.pos.x + b.vel.x * dt, this.w);
+      b.pos.y = wrapF(b.pos.y + b.vel.y * dt, this.h);
+    }
+
+    this.bullets = this.bullets.filter((b) => b.life > 0);
+
+    // --- Rocks ------------------------------------------------------------
+    for (const r of this.rocks) {
+      r.pos.x = wrapF(r.pos.x + r.vel.x * dt, this.w);
+      r.pos.y = wrapF(r.pos.y + r.vel.y * dt, this.h);
+      r.ang += r.spin * dt;
+    }
+
+    // --- Bullet/rock ------------------------------------------------------
+    for (let bi = 0; bi < this.bullets.length;) {
+      let consumed = false;
+
+      for (let ri = 0; ri < this.rocks.length; ri += 1) {
+        const dx = wrapDelta(this.bullets[bi].pos.x, this.rocks[ri].pos.x, this.w);
+        const dy = wrapDelta(this.bullets[bi].pos.y, this.rocks[ri].pos.y, this.h);
+
+        if (dx * dx + dy * dy <= this.rocks[ri].radius * this.rocks[ri].radius) {
+          this.bullets.splice(bi, 1);
+          this.splitRock(ri, rng, cfg);
+          consumed = true;
+          break;
+        }
+      }
+
+      if (!consumed) bi += 1;
+    }
+
+    // --- Ship/rock --------------------------------------------------------
+    if (this.invulnTicks === 0) {
+      for (const r of this.rocks) {
+        const dx = wrapDelta(this.ship.x, r.pos.x, this.w);
+        const dy = wrapDelta(this.ship.y, r.pos.y, this.h);
+
+        // Ship treated as a point with a small hull radius. Polygon-exact
+        // collision would be more correct and, at this resolution, entirely
+        // invisible.
+        const hull = r.radius + 0.7;
+        if (dx * dx + dy * dy <= hull * hull) {
+          this.lives -= 1;
+          this.hitFlash = 20;
+          this.bullets = [];
+          if (this.lives > 0) this.respawnShip();
+          return;
+        }
+      }
+    }
+
+    // --- Wave clear -------------------------------------------------------
+    if (this.rocks.length === 0) {
+      this.wave += 1;
+      this.scoreValue += 150;
+      this.spawnWave(cfg, rng);
+    }
+  }
+
+  draw(cfg, grid) {
+    void cfg;
+    grid.clear();
+
+    // No border. This playfield wraps, and drawing walls around a wrapping field
+    // tells the viewer the opposite of the truth.
+
+    for (const r of this.rocks) {
+      const xs = new Array(kRockVerts);
+      const ys = new Array(kRockVerts);
+
+      for (let i = 0; i < kRockVerts; i += 1) {
+        const a = r.ang + i * (kDriftPi * 2 / kRockVerts);
+        xs[i] = r.pos.x + Math.cos(a) * r.radius * r.shape[i];
+        ys[i] = r.pos.y + Math.sin(a) * r.radius * r.shape[i];
+      }
+
+      drawPolyWrapped(grid, xs, ys, kRockVerts, Cell.Brick, 140 + r.size * 40, r.size);
+    }
+
+    for (const b of this.bullets) {
+      grid.set(Math.floor(b.pos.x), Math.floor(b.pos.y), Cell.Ball, 255);
+    }
+
+    // Ship: a nose, two flanks and a notched tail. Four points is the smallest
+    // shape that still reads as pointing somewhere at this size.
+    if (this.lives > 0) {
+      const nose = 1.9;
+      const flank = 1.3;
+      const sweep = 2.5;
+
+      const pts = [
+        [0, -nose],
+        [flank, sweep * 0.45],
+        [0, sweep * 0.12],
+        [-flank, sweep * 0.45],
+      ];
+
+      const xs = new Array(4);
+      const ys = new Array(4);
+      const c = Math.cos(this.angle);
+      const s = Math.sin(this.angle);
+
+      for (let i = 0; i < 4; i += 1) {
+        xs[i] = this.ship.x + pts[i][0] * c - pts[i][1] * s;
+        ys[i] = this.ship.y + pts[i][0] * s + pts[i][1] * c;
+      }
+
+      // Blink while invulnerable, which is both the convention and the only way
+      // to tell that a respawned ship is not yet solid.
+      const visible = this.invulnTicks === 0 || Math.trunc(this.invulnTicks / 6) % 2 === 0;
+      if (visible) drawPolyWrapped(grid, xs, ys, 4, Cell.Head, 255);
+
+      if (this.thrusting && visible) {
+        const fx = this.ship.x - s * (sweep * 0.8);
+        const fy = this.ship.y + c * (sweep * 0.8);
+        grid.set(Math.floor(fx), Math.floor(fy), Cell.Food, 220);
+      }
+    }
+  }
+
+  score() { return this.scoreValue; }
+
+  finished() { return this.lives <= 0; }
+
+  intensity() {
+    return Math.min(1, this.rocks.length * 0.08 + (this.hitFlash / 20) * 0.6);
+  }
+}
+
 /// Which games this page carries. See the note in `differences`: the plugin has
 /// five and this port currently has the ones listed here.
 const GAMES = {
   0: () => new Snake(),
   1: () => new Bricks(),
+  2: () => new Marchers(),
+  3: () => new Rally(),
+  4: () => new Drift(),
 };
 
 const PORTED_GAME_NAMES = Object.keys(GAMES).map((i) => GAME_NAMES[i]);
@@ -1621,7 +2680,10 @@ const DEMO = {
   sources: ['scene', 'grid', 'bars', 'spot', 'ramp', 'detail', 'alpha'],
 
   differences: [
-    `INCOMPLETE: the plugin has five games and this page currently carries ${PORTED_GAME_NAMES.length} — ${PORTED_GAME_NAMES.join(', ')}. The rest are not in the dropdown rather than being there and doing nothing.`,
+    ...(PORTED_GAME_NAMES.length < GAME_NAMES.length
+      ? [`INCOMPLETE: the plugin has ${GAME_NAMES.length} games and this page currently carries ${PORTED_GAME_NAMES.length} — ${PORTED_GAME_NAMES.join(', ')}. The rest are not in the dropdown rather than being there and doing nothing.`]
+      : []),
+    'The shaders are the plugin\'s own text, copied across and checked character for character. The five game simulations are a HAND PORT — a second implementation of the thing this plugin actually is. That port is checked: `coinoptest --grid` runs every game under one fixed configuration and reduces the playfield to a digest, and `demo/tools/check_sim.mjs` drives this JavaScript through the same sequence and diffs it. All five agree byte for byte. What that does not cover is a sweep over seeds, skills or grid sizes, or the interactive path — it runs on autopilot with no input — and the C++ computes in 32-bit float where JavaScript has only 64-bit doubles, so the two could still drift apart over a longer run than the check exercises.',
     'Step and Restart do not mean what they mean on the other demos. This is the one plugin in the set with real simulation state, so a frame cannot be rendered on its own: Step advances the game by one frame of time and cannot go back, and Restart begins a new game rather than rewinding this one.',
     'The arrow keys and WASD are this page\'s stand-in for the MIDI or OSC mapping you would use in Resolume. They push the same values onto the same input queue the Left/Right/Up/Down/Fire parameters do — the plugin itself has no keyboard, because FFGL has none.',
     'Those five parameters are FF_TYPE_EVENT in the plugin — a momentary press. Here they are toggles, and it is the 0 to 1 transition that is latched as the press, which is exactly what LatchButton does with the host\'s value changes.',

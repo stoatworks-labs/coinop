@@ -4,9 +4,8 @@ Intended for **https://coinop-demo.stoatworks-labs.com**, to be linked from the
 [project page](https://stoatworks-labs.com/software/coinop/) and from the
 [video plugins page](https://stoatworks-labs.com/video-plugins/).
 
-> **INCOMPLETE — do not deploy yet.** The plugin has five games; this page
-> carries **Snake and Bricks**. Marchers, Rally and Drift are not in the dropdown
-> rather than being there and doing nothing. See "Finishing it" below.
+All five games are ported — Snake, Bricks, Marchers, Rally and Drift — and every
+one of them agrees with the C++ byte for byte under `check_sim.mjs`.
 
 **This is not the plugin.** The two shaders are the text from
 [`source/Shaders.cpp`](../source/Shaders.cpp), copied across unedited —
@@ -62,21 +61,17 @@ advances the game by one frame's worth of time and cannot go back; Restart begin
 a new game rather than rewinding this one. That is the plugin's own behaviour,
 and the reason `Sim.h` opens by admitting it breaks the fleet's rule knowingly.
 
-## Finishing it
+## Adding a sixth game
 
-Each remaining game is one class implementing `reset / step / draw / tickHz /
-finished / intensity`, ported from `source/games/`, then added to the `GAMES` map:
+One class implementing `reset / step / draw / tickHz / score / finished /
+intensity`, ported from `source/games/`, then one line in the `GAMES` map. The
+dropdown is built from whichever keys `GAMES` has and the `differences` entry
+counts them itself, so nothing else needs touching.
 
-| Game | Source | Notes |
-|---|---|---|
-| Marchers | `Marchers.{h,cpp}` | Formation steps down and shoots back, speeding up as it thins out. |
-| Rally | `Rally.{h,cpp}` | Two paddles, one ball. Axis drives one, two buttons the other. |
-| Drift | `Drift.{h,cpp}` | The vector game — continuous rotation and sub-cell drift, rasterised into the same grid. |
-
-`GAME_NAMES` already holds all five in the plugin's order, and the dropdown is
-built from whichever keys `GAMES` has, so adding one is a single line. The
-`differences` entry that admits the gap counts them itself and will shrink on its
-own.
+Port it against `check_sim.mjs` rather than against the screen: add the game to
+`GAMES`, run the checker, and fix until the digest matches. Marchers and Drift
+were both done that way and both matched on the first run, which is the point —
+a game that *looks* right is not evidence.
 
 ## Editing it
 
@@ -88,7 +83,7 @@ own.
 
 ## Deploying
 
-Not yet. When the games are all in, from the repo root:
+From the repo root:
 
 ```bash
 cf-run npx wrangler deploy
