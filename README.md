@@ -88,15 +88,15 @@ or OSC-map any of them. So every control is a parameter:
 
 ## Download
 
-**[v0.2.0](https://github.com/stoatworks-labs/coinop/releases/tag/v0.2.0)** — prebuilt for macOS and Windows. Pick your platform:
+**[v0.3.0](https://github.com/stoatworks-labs/coinop/releases/tag/v0.3.0)** — prebuilt for macOS and Windows. Pick your platform:
 
 <details>
 <summary><b>macOS</b> — Universal (Apple Silicon + Intel)</summary>
 
 | Build | Download | Size |
 | --- | --- | --- |
-| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-0.2.0-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v0.2.0/coinop-0.2.0-macos-universal.dmg) | 989 KB |
-| Universal (Apple Silicon + Intel) · .zip archive | [`coinop-macos-universal.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-macos-universal.zip) | 625 KB |
+| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-0.3.0-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v0.3.0/coinop-0.3.0-macos-universal.dmg) | 998 KB |
+| Universal (Apple Silicon + Intel) · .zip archive | [`coinop-macos-universal.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-macos-universal.zip) | 627 KB |
 
 </details>
 
@@ -105,8 +105,8 @@ or OSC-map any of them. So every control is a parameter:
 
 | Build | Download | Size |
 | --- | --- | --- |
-| x64 · .exe installer | [`coinop-0.2.0-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/coinop/releases/download/v0.2.0/coinop-0.2.0-windows-x86_64-setup.exe) | 262 KB |
-| x64 · .zip archive | [`coinop-windows-x86_64.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-windows-x86_64.zip) | 324 KB |
+| x64 · .exe installer | [`coinop-0.3.0-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/coinop/releases/download/v0.3.0/coinop-0.3.0-windows-x86_64-setup.exe) | 203 KB |
+| x64 · .zip archive | [`coinop-windows-x86_64.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-windows-x86_64.zip) | 343 KB |
 
 </details>
 
