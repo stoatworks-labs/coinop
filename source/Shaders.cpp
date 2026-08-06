@@ -24,8 +24,9 @@ const char* const kEffectDefine = "#define COINOP_OVER_INPUT 1\n";
 
 	The sim hands over a grid of four-byte cells and this decides what a cell
 	looks like. Everything below the playfield mapping is styling; nothing here
-	knows which game is running, which is the point -- a sixth game needs no
-	shader change as long as it draws with the cell types that already exist.
+	knows which game is running, which is the point -- a new game needs no shader
+	change as long as it draws with the cell types that already exist. Eight were
+	added at once and seven of them needed nothing; the eighth wanted `Enemy`.
 */
 const char* const kCellShader = R"(#version 410 core
 

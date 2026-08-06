@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(Coinop
-    VERSION 0.1.0
+    VERSION 0.2.0
     LANGUAGES CXX
 )
 
@@ -165,7 +165,8 @@ if(COINOP_BUILD_PLUGINS)
     # The two plugins. FFGL resolves one plugMain per binary, so a source and an
     # effect are two bundles -- not one bundle with two entries.
     #
-    # Five games are NOT five bundles: the game is a dropdown. See Game.h.
+    # Thirteen games are NOT thirteen bundles: the game is a dropdown. See
+    # Game.h for what that arrangement costs and what it bought.
     # -----------------------------------------------------------------------
     function(coinop_add_plugin target entry bundle_name identifier)
         add_library(${target} MODULE ${entry})
