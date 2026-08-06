@@ -91,6 +91,8 @@ add_library(coinop_sim STATIC
     source/games/Rafters.cpp
     source/games/Duel.h
     source/games/Duel.cpp
+    source/games/Flapper.h
+    source/games/Flapper.cpp
 )
 
 target_include_directories(coinop_sim PUBLIC source)

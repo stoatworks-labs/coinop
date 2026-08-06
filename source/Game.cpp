@@ -4,6 +4,7 @@
 #include "games/Chase.h"
 #include "games/Drift.h"
 #include "games/Duel.h"
+#include "games/Flapper.h"
 #include "games/Girders.h"
 #include "games/Marchers.h"
 #include "games/Rafters.h"
@@ -34,6 +35,7 @@ const char* GameName( GameId id )
 		case GameId::Reflex: return "Reflex";
 		case GameId::Rafters: return "Rafters";
 		case GameId::Duel: return "Duel";
+		case GameId::Flapper: return "Flapper";
 		default: return "Snake";
 	}
 }
@@ -54,6 +56,7 @@ std::unique_ptr< Game > MakeGame( GameId id )
 		case GameId::Reflex: return std::make_unique< Reflex >();
 		case GameId::Rafters: return std::make_unique< Rafters >();
 		case GameId::Duel: return std::make_unique< Duel >();
+		case GameId::Flapper: return std::make_unique< Flapper >();
 		case GameId::Snake:
 		default: return std::make_unique< Snake >();
 	}

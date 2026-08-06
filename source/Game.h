@@ -11,18 +11,19 @@
 
 	## One plugin, a Game dropdown
 
-	Thirteen games could have been twenty-six bundles -- a source and an effect
+	Fourteen games could have been twenty-eight bundles -- a source and an effect
 	each. They are not, for the reason `idler` next door keeps eleven
-	screensavers in one plugin: a Resolume user does not want twenty-six entries
-	in the effect list that differ only in which sprite moves, and a fourteenth
-	game should not cost a fourteenth bundle, a fourteenth plugin ID, a
-	fourteenth entry in every release note.
+	screensavers in one plugin: a Resolume user does not want twenty-eight
+	entries in the effect list that differ only in which sprite moves, and a
+	fifteenth game should not cost a fifteenth bundle, a fifteenth plugin ID, a
+	fifteenth entry in every release note.
 
-	It has since been paid for once. Eight games were added at once and the
+	It has since been paid for twice. Eight games were added at once and the
 	whole cost was eight entries in `GameId`, eight files in the CMake list, and
-	one new cell type between all of them. Nothing about the plugin, the
-	parameter list or the shader had to change per game, which is the thing this
-	arrangement was betting on.
+	one new cell type between all of them; `Flapper` then cost an entry, a file
+	and no new cell type at all. Nothing about the plugin, the parameter list or
+	the shader has had to change per game, which is the thing this arrangement
+	was betting on.
 
 	The cost is that the parameter list is the union of what the games need, so
 	it is kept deliberately generic -- Speed, Skill, Seed, and a handful of
@@ -67,6 +68,7 @@ enum class GameId : unsigned int
 	Reflex,   ///< A prompt, a closing window, and the right button or nothing.
 	Rafters,  ///< Bump the floor from below to flip what is standing on it.
 	Duel,     ///< Two fighters, wind-up and recovery, best of three.
+	Flapper,  ///< One button against gravity, through the gaps in a moving wall.
 	Count
 };
 

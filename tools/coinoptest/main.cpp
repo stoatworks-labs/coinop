@@ -21,6 +21,7 @@
 #include "games/Chase.h"
 #include "games/Drift.h"
 #include "games/Duel.h"
+#include "games/Flapper.h"
 #include "games/Girders.h"
 #include "games/Marchers.h"
 #include "games/Rafters.h"
@@ -31,10 +32,12 @@
 #include "games/Swarm.h"
 #include "games/Trails.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace coinop;
@@ -1314,6 +1317,166 @@ void TestDuel()
 }
 
 //---------------------------------------------------------------------------
+// Flapper. Two things need asserting that no generic check catches: that the
+// flier gets through columns at all, and that it still eventually dies.
+//---------------------------------------------------------------------------
+void TestFlapper()
+{
+	Section( "Flapper" );
+
+	GameConfig cfg = BaseConfig();
+	cfg.skill      = 1.0f;
+
+	Rng rng( cfg.seed );
+	Input in;
+	Flapper game;
+	game.Reset( cfg, rng );
+
+	bool sawColumn = false;
+	bool boundsOk  = true;
+	bool clearOk   = true;
+	bool rampOk    = true;
+	bool livesOk   = true;
+	int lives      = game.Lives();
+	int startGap   = game.GapHeight();
+
+	for( int i = 0; i < 80000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		sawColumn = sawColumn || game.Columns() > 0;
+
+		// The tick a life is lost is the crash frame: the flier is inside
+		// whatever killed it, on purpose, because that is where the player is
+		// shown to have hit. Asserting anything about its position on that tick
+		// asserts that crashing does not happen.
+		const bool crashed = game.Lives() < lives;
+		livesOk            = livesOk && game.Lives() <= lives;
+		lives              = game.Lives();
+
+		if( !crashed )
+		{
+			const int fy = game.FlierY();
+			boundsOk     = boundsOk && fy >= 1 && fy <= cfg.gridH - 2;
+
+			// The swept collision test's whole job. A flier standing inside a
+			// column on a tick it survived means a column crossed it untested --
+			// which is what happens if kMaxScroll is ever raised past a cell a
+			// tick and the sweep is dropped for a plain overlap.
+			clearOk = clearOk && !game.Solid( game.FlierX(), fy );
+		}
+
+		// The ramp only ever tightens, and never past its floors.
+		rampOk = rampOk && game.GapHeight() >= Flapper::kMinGap &&
+		         game.Spacing() >= Flapper::kMinSpacing &&
+		         game.Scroll() <= Flapper::kMaxScroll + 1e-4f;
+	}
+
+	Check( sawColumn, "columns arrive" );
+	Check( boundsOk, "the flier stays between the ceiling and the floor" );
+	Check( clearOk, "the flier never ends a tick inside a column" );
+	Check( rampOk, "the ramp never passes its own floors" );
+	Check( livesOk, "lives only ever go down" );
+	Check( game.Finished(), "a game of Flapper eventually ends" );
+
+	// The check this game exists to fail. A flier that never passes a column
+	// still satisfies every assertion above -- it dies three times, in bounds,
+	// having touched nothing -- and that is precisely what the first autopilot
+	// did on every seed, because it projected free fall forward and settled a
+	// braking distance above the hole it was aiming at. Scoring is the only
+	// thing that distinguishes playing the game from surviving next to it.
+	Check( game.Score() > 0, "a skilled flier gets through columns (" +
+	                             std::to_string( game.Score() ) + ")" );
+
+	// The scroll must stay under a cell a tick, or a column can step from one
+	// side of the flier to the other without the flier's own column ever being
+	// the one tested. The sweep in Blocks covers it; this keeps the two
+	// defences from silently becoming one.
+	Check( Flapper::kMaxScroll < 1.0f, "a column never moves a whole cell in a tick" );
+
+	// The termination argument from the header, done as arithmetic rather than
+	// trusted as prose. At the floor of the ramp there are this many ticks
+	// between columns, and the flier cannot cross the playfield in them, so a
+	// hole that has drifted the width of the playfield away is unreachable.
+	{
+		const float ticksBetween = float( Flapper::kMinSpacing ) / Flapper::kMaxScroll;
+		const float reach        = ticksBetween * Flapper::kMaxFall;// generous
+		Check( reach < float( cfg.gridH - 4 ),
+		       "at the ramp floor a hole can drift further than the flier can travel" );
+	}
+
+	// The ramp has to actually engage, or termination rests on nothing.
+	Check( game.GapHeight() < startGap, "the gap narrows as columns are passed" );
+
+	// Skill has to be visible, in both directions. Survival alone is not enough
+	// here: a flier that refuses to move survives a while and plays nothing.
+	auto play = []( float skill ) {
+		int ticks = 0;
+		int score = 0;
+		for( uint64_t seed = 1; seed <= 8; ++seed )
+		{
+			GameConfig c = BaseConfig();
+			c.skill      = skill;
+			c.seed       = seed;
+
+			Rng r( seed );
+			Input i2;
+			Flapper g;
+			g.Reset( c, r );
+
+			int t = 0;
+			for( ; t < 40000 && !g.Finished(); ++t )
+				g.Step( c, i2, r );
+
+			ticks += t;
+			score += g.Score();
+		}
+		return std::pair< int, int >{ ticks, score };
+	};
+
+	const auto clumsy = play( 0.1f );
+	const auto adept  = play( 1.0f );
+
+	Check( adept.first > clumsy.first, "a skilled flier lasts longer (" +
+	                                       std::to_string( adept.first ) + " > " +
+	                                       std::to_string( clumsy.first ) + ")" );
+	Check( adept.second > clumsy.second, "a skilled flier scores more (" +
+	                                         std::to_string( adept.second ) + " > " +
+	                                         std::to_string( clumsy.second ) + ")" );
+
+	// Both ends of Difficulty terminate. Difficulty sets where the ramp starts,
+	// and an easy start must not mean an endless run.
+	{
+		bool allEnded = true;
+		int longest   = 0;
+		for( float diff : { 0.0f, 1.0f } )
+			for( uint64_t seed = 1; seed <= 4; ++seed )
+			{
+				GameConfig c = BaseConfig();
+				c.skill      = 1.0f;
+				c.difficulty = diff;
+				c.seed       = seed;
+
+				Rng r( seed );
+				Input i2;
+				Flapper g;
+				g.Reset( c, r );
+
+				int t = 0;
+				for( ; t < 200000 && !g.Finished(); ++t )
+					g.Step( c, i2, r );
+
+				allEnded = allEnded && g.Finished();
+				longest  = std::max( longest, t );
+			}
+
+		Check( allEnded, "a perfect flier ends at both ends of Difficulty" );
+		if( gVerbose )
+			std::printf( "       (longest perfect run %d ticks)\n", longest );
+	}
+}
+
+//---------------------------------------------------------------------------
 // Things every game has to be true of, whatever it is.
 //---------------------------------------------------------------------------
 void TestAllGames()
@@ -1610,6 +1773,7 @@ int main( int argc, char** argv )
 	TestReflex();
 	TestRafters();
 	TestDuel();
+	TestFlapper();
 	TestAllGames();
 
 	std::printf( "\n%s%d checks, %d failed\033[0m\n",

@@ -1,6 +1,6 @@
 # coinop — orientation for another LLM (or a newcomer)
 
-**What it is:** thirteen playable arcade games as **two** FFGL 2.1 plugins for
+**What it is:** fourteen playable arcade games as **two** FFGL 2.1 plugins for
 Resolume Arena/Avenue. `Coinop` is a source that draws a playfield over its own
 background; `Coinop Over` is an effect that draws it over the incoming clip —
 and can build the brick field *out of* the clip. C++17 + GLSL 4.10, CMake,
@@ -8,8 +8,9 @@ universal macOS `.bundle` and a Windows `.dll`.
 
 Snake, Bricks, Marchers, Rally and Drift shipped in v0.1.0. Stacker, Chase,
 Girders, Swarm, Trails, Reflex, Rafters and Duel came after, and cost one new
-cell type between the eight of them — see the cell encoding below, and see
-**Naming** for the rule every one of them was written to.
+cell type between the eight of them. Flapper came after those and cost no new
+cell type at all — see the cell encoding below, and see **Naming** for the rule
+every one of them was written to.
 
 `CLAUDE.md` is the command reference — build, verify, install. This file is the
 *why*: read it before touching the timestep, the input path, or the cell
@@ -196,6 +197,14 @@ Every one of these was found by measuring, not by reasoning:
   health.
 - **Trails.** Somebody always survives a light-cycle round, so, like Rally, the
   match runs to a target number of round wins.
+- **Flapper.** The clearest case of the four, because there is no version of it
+  that ends on its own: holding one axis between two edges is an easy enough
+  control problem that a competent flier at a fixed difficulty never dies at
+  all. So difficulty is a ramp rather than a setting — the gap narrows, the
+  scroll speeds up, the columns close together and the next hole may sit further
+  from the last — until the hole is further away than the flier can travel
+  between two columns. That is arithmetic on the ramp's own floors, and
+  `coinoptest` does the arithmetic rather than trusting the comment.
 
 **Girders had the mirror of this bug** and it is the one to watch for: the hop
 made the climber immune to anything on its floor, there was no cooldown, and the
@@ -300,7 +309,13 @@ The two places worth reading for how far the differences go beyond naming:
   else, because everything else that game was is hand-drawn animation, and
   none of that is portable to a cell grid whether or not it were free.
 
+- **Flapper** takes the one-button gravity mechanic and nothing else. What was
+  found against that game was never the rule anyway — it was the bird, the
+  pipes and the palette, none of which survives being drawn from this plugin's
+  own cells by role.
+
 The eight are Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters and Duel.
+Flapper is the fourteenth.
 
 ---
 
@@ -308,16 +323,17 @@ The eight are Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters and Duel.
 
 Verified offline, in two harnesses, on macOS:
 
-- `coinoptest` — 243 checks. Determinism per game, the three timing defences,
+- `coinoptest` — 266 checks. Determinism per game, the three timing defences,
   and per-game invariants: Snake's turn queue and reversal guard, Bricks'
   tunnelling and both locks, Rally's termination, Marchers' formation bounds,
   Drift's wrapping, Stacker's clear rule and fall ramp, Chase's maze loops and
   the reversal ban, Girders' floor ordering, Swarm's divers leaving and
   rejoining, Trails' head-on symmetry, Reflex's closing window, Rafters' bump
-  and its one-cell collision, Duel's round limit. Plus, for every game: only
+  and its one-cell collision, Duel's round limit, Flapper's swept collision and
+  the arithmetic behind its ramp terminating. Plus, for every game: only
   known cell types are ever written, `Draw` is pure, extreme grid sizes still
   draw, and the whole thing survives a jittery frame clock.
-- `coinopgl` — 31 checks. Both shader variants compile and link, all thirteen
+- `coinopgl` — 33 checks. Both shader variants compile and link, all fourteen
   games render lit cells rather than a flat background, the letterbox lands
   exactly where it should, and no GL error is raised.
 

@@ -9,7 +9,7 @@
 > they draw (see [Status](#status)). It has **never been loaded into Resolume**.
 > Check it in your own rig before trusting it in a show.
 
-Thirteen playable arcade games for [Resolume](https://resolume.com) Arena and
+Fourteen playable arcade games for [Resolume](https://resolume.com) Arena and
 Avenue, as a pair of FFGL plugins. Driven by MIDI or OSC, or left to play
 themselves.
 
@@ -18,7 +18,7 @@ themselves.
 
 ![Chase, Trails, Stacker and Girders, on four of the six palettes](docs/hero.png)
 
-<sub>Four of the thirteen, on four of the six palettes — Chase on Amber, Trails
+<sub>Four of the fourteen, on four of the six palettes — Chase on Amber, Trails
 on Ice, Stacker on Candy, Girders on Fire. Rendered by `coinopgl`, the offline
 harness: the real autopilot playing through the real cell shader, not a Resolume
 screen capture.</sub>
@@ -38,6 +38,7 @@ screen capture.</sub>
 | **Reflex** | A prompt, a closing window, and the right button or nothing. |
 | **Rafters** | Hit the floor from below to flip what is standing on it. |
 | **Duel** | Two fighters. Wind-up, active, recovery. Best of three. |
+| **Flapper** | One button against gravity, through the gaps in a moving wall. |
 
 The mechanics are the public domain part; the names are not. None of these is
 named after what it descends from, and none of them copies the parts a court
@@ -142,14 +143,15 @@ Verified offline on macOS, in two harnesses:
   termination, Marchers' bounds, Drift's wrapping, Stacker's clear rule,
   Chase's maze loops and its reversal ban, Girders' floor ordering, Swarm's
   divers rejoining, Trails' head-on symmetry, Reflex's closing window,
-  Rafters' one-cell collision, Duel's round limit.
+  Rafters' one-cell collision, Duel's round limit, Flapper's swept collision
+  and its difficulty ramp.
 - **`coinopgl`** — 31 checks, headless CGL. Both shader variants compile and
-  link, all thirteen games render lit cells, the letterbox lands exactly where
+  link, all fourteen games render lit cells, the letterbox lands exactly where
   it should, no GL error.
 
-- **`demo/tools/check_sim.mjs`** — the browser demo re-implements all thirteen
+- **`demo/tools/check_sim.mjs`** — the browser demo re-implements all fourteen
   games in JavaScript, and `coinoptest --grid` reduces each one to a digest of
-  its playfield after a fixed run. All thirteen agree byte for byte.
+  its playfield after a fixed run. All fourteen agree byte for byte.
 
 Not verified: the plugin has never been loaded into Resolume, the FFGL parameter
 and clock plumbing is the part no harness here reaches, and the Windows build

@@ -4,8 +4,8 @@ Live at **https://coinop-demo.stoatworks-labs.com**, linked from the
 [project page](https://stoatworks-labs.com/software/coinop/) and from the
 [video plugins page](https://stoatworks-labs.com/video-plugins/).
 
-**All thirteen games are ported** — Snake, Bricks, Marchers, Rally, Drift,
-Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters and Duel — and every one
+**All fourteen games are ported** — Snake, Bricks, Marchers, Rally, Drift,
+Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters, Duel and Flapper — and every one
 of them agrees with the C++ byte for byte under `check_sim.mjs`.
 
 The dropdown is built from whichever keys `GAMES` carries, and the page prints
@@ -71,7 +71,7 @@ and the reason `Sim.h` opens by admitting it breaks the fleet's rule knowingly.
 
 One class implementing `reset / step / draw / tickHz / score / finished /
 intensity`, ported from `source/games/`, then one line in the `GAMES` map.
-`GAME_NAMES` already lists all thirteen in `GameId` order; the dropdown is built
+`GAME_NAMES` already lists all fourteen in `GameId` order; the dropdown is built
 from whichever keys `GAMES` has and the notice counts the difference itself, so
 nothing else needs touching.
 
@@ -93,6 +93,27 @@ threshold like `abs(f.x - shipX) < 0.9` can in principle fall on opposite sides
 in the two implementations, and everything after that point is a different game.
 Nothing here proves it does not happen at tick 4000 — only that it does not
 happen by tick 400.
+
+**Flapper is the game where that finally bit, and it bit on tick zero.** It is
+the first port that did not match on its first run, and the reason is exactly
+the one above rather than a mistake in the port: `0.12f + 0.10f * 0.5f` is
+0.169999998 as a float and 0.17 as a double, so the scroll speed was wrong
+before the first column existed.
+
+What makes Flapper different from the thirteen that got away with it is not that
+it carries floats — Rafters and Duel do too — but that it never puts them down.
+Every other game re-quantises constantly: actors land on whole rows, pieces lock
+to cells, and any accumulated drift is erased before it can reach a cell index.
+Flapper's altitude and its column positions are continuous for the entire run,
+so the two implementations drift apart monotonically until one of them crosses a
+`round()` boundary the other has not.
+
+So its port rounds to single precision with `Math.fround` after each individual
+operation, exactly where the C++ rounds, and its constants are pre-rounded. That
+is the fix for this class of divergence generally, and the next game that
+carries state it never snaps to a grid should start there rather than discover
+it. Do not sprinkle it over the other thirteen: they match as they stand, and a
+change that cannot be observed to help is a change that can only break them.
 
 ## Editing it
 

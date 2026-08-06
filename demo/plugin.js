@@ -468,6 +468,7 @@ const PALETTE_NAMES = ['Phosphor', 'Amber', 'Ice', 'Candy', 'Mono', 'Fire'];
 const GAME_NAMES = [
   'Snake', 'Bricks', 'Marchers', 'Rally', 'Drift',
   'Stacker', 'Chase', 'Girders', 'Swarm', 'Trails', 'Reflex', 'Rafters', 'Duel',
+  'Flapper',
 ];
 
 /// 12 to 128, squared. A pixel map is usually at the coarse end and that is
@@ -6149,7 +6150,319 @@ class Duel {
   }
 }
 
-/// Which games this page carries — all thirteen the plugin has, in `GameId`
+//===========================================================================
+// Port of source/games/Flapper.{h,cpp}
+//
+// One button against gravity, through the gaps in a wall that scrolls past.
+// The press *sets* the vertical velocity rather than adding to it, so every
+// flap is the same arc from wherever it is pressed and the player is timing one
+// thing rather than managing a throttle.
+//
+// Difficulty is a ramp and not a setting, because it has to be: threading gaps
+// is an easy enough control problem that a good flier at a fixed difficulty
+// never dies, and a layer that never changes is the thing the respawn delay
+// exists to prevent. Every column passed narrows the gap, speeds the scroll,
+// pulls the columns together and widens how far the next hole may sit from the
+// last, until the hole is further away than the flier can travel between two
+// columns.
+//===========================================================================
+
+// `fr` is Math.fround, and this is the one game on the page that needs it.
+//
+// The other thirteen ports do their arithmetic in JavaScript doubles against a
+// C++ sim that uses `float`, and match anyway. They get away with it because
+// they re-quantise constantly: a snake is on integer cells, and even Rafters
+// snaps `y` to a whole row every time an actor lands. Any drift is erased
+// before it can reach a cell index.
+//
+// Flapper never re-quantises. The flier's altitude and every column's x are
+// continuous for the whole run, so a double and a float diverge monotonically
+// until one of them crosses a `round()` boundary the other has not — and then
+// the playfields differ by a cell and stay differing. It is not subtle either:
+// `0.12f + 0.10f * 0.5f` is 0.169999998 as a float and 0.17 as a double, so the
+// scroll speed is wrong on the very first tick.
+//
+// So every accumulating expression here is rounded to single precision exactly
+// where the C++ rounds, which is after each individual operation. The constants
+// are pre-rounded for the same reason.
+const fr = Math.fround;
+
+const FLAPPER_GRAVITY = fr(0.04);
+const FLAPPER_FLAP = fr(0.3);
+const FLAPPER_SINK = fr(0.45);
+const FLAPPER_DAMP = fr(2);
+const FLAPPER_RAMP_SCROLL = fr(0.012);
+const FLAPPER_MIN_GAP = 2;
+const FLAPPER_MIN_SPACING = 4;
+const FLAPPER_MAX_SCROLL = fr(0.85);
+const FLAPPER_MAX_FALL = fr(0.9);
+const FLAPPER_COL_WIDTH = 2;
+
+function flapperRound(v) { return Math.floor(v + 0.5); }
+
+class Flapper {
+  reset(cfg, rng) {
+    this.w = cfg.gridW;
+    this.h = cfg.gridH;
+
+    this.flierX = Math.max(1, Math.floor(this.w / 4));
+    this.y = Math.floor((this.h - 1) / 2);
+    this.vy = 0;
+
+    const diff = fr(clamp01(cfg.difficulty));
+
+    const maxGap = this.maxGap();
+    const wide = Math.round(fr(fr(this.h) * fr(fr(0.3) - fr(fr(0.1) * diff))));
+
+    // clamp is undefined when lo > hi, and on a six-row playfield it is.
+    const lo = Math.min(FLAPPER_MIN_GAP + 1, maxGap);
+    this.gapH = clamp(wide, lo, maxGap);
+
+    this.scroll = fr(fr(0.12) + fr(fr(0.1) * diff));
+    this.spacing = Math.max(FLAPPER_MIN_SPACING, Math.floor(this.w / 3));
+    this.drift = 2;
+
+    this.lastGapY = clamp(Math.floor((this.h - this.gapH) / 2), 1,
+      Math.max(1, this.h - 1 - this.gapH));
+
+    this.columns = [];
+
+    this.scoreValue = 0;
+    this.passed = 0;
+    this.lives = 3;
+    this.ticks = 0;
+    this.hurt = 0;
+  }
+
+  maxGap() { return Math.max(FLAPPER_MIN_GAP, this.h - 4); }
+
+  solid(x, y) {
+    if (y <= 0 || y >= this.h - 1) return true;
+
+    for (let i = 0; i < this.columns.length; i += 1) {
+      const c = this.columns[i];
+      const left = flapperRound(c.x);
+      if (x < left || x > left + FLAPPER_COL_WIDTH - 1) continue;
+      if (y < c.gapY || y >= c.gapY + c.gapH) return true;
+    }
+
+    return false;
+  }
+
+  // The span the column *crossed* this tick, not the one it landed on — the
+  // property that survives someone raising the scroll cap past a cell a tick.
+  blocks(c, sweptFrom, y) {
+    const left = flapperRound(c.x);
+    const right = flapperRound(sweptFrom) + FLAPPER_COL_WIDTH - 1;
+
+    if (this.flierX < left || this.flierX > right) return false;
+
+    return y < c.gapY || y >= c.gapY + c.gapH;
+  }
+
+  targetRow() {
+    for (let i = 0; i < this.columns.length; i += 1) {
+      const c = this.columns[i];
+      // Anything already behind the flier is history, and aiming at it drags
+      // the flier back down through the hole it just left.
+      if (flapperRound(c.x) + FLAPPER_COL_WIDTH - 1 < this.flierX) continue;
+      return c.gapY + Math.floor(c.gapH / 2);
+    }
+
+    return Math.floor((this.h - 1) / 2);
+  }
+
+  // A damped position error, not a forward projection. Projecting free fall
+  // forward means flapping as soon as the flier is within a braking distance of
+  // the hole, so it settles a braking distance above it: aiming at row 12 it
+  // hovered at row 7 and clipped the top of every column. It never scored once.
+  chooseFlap() {
+    return fr(this.y + fr(FLAPPER_DAMP * this.vy)) > this.targetRow();
+  }
+
+  spawn(rng) {
+    const x = this.columns.length === 0
+      ? fr(this.w)
+      : fr(this.columns[this.columns.length - 1].x + fr(this.spacing));
+
+    // The hole walks from the last one rather than being drawn fresh.
+    // Independent holes make an early field already unplayable and a late field
+    // no worse, so the ramp would have nothing to ramp.
+    const lo = 1;
+    const hi = Math.max(lo, this.h - 1 - this.gapH);
+    const span = 2 * this.drift + 1;
+
+    let y = this.lastGapY + rng.below(span) - this.drift;
+    y = clamp(y, lo, hi);
+
+    this.lastGapY = y;
+    this.columns.push({ x, gapY: y, gapH: this.gapH, taken: false });
+  }
+
+  ramp() {
+    const maxGap = this.maxGap();
+
+    // Three columns a step, not one: narrowing on every column outruns the
+    // scroll and the run ends before the field has visibly sped up.
+    if (this.passed % 3 === 0 && this.gapH > FLAPPER_MIN_GAP) this.gapH -= 1;
+
+    this.scroll = Math.min(FLAPPER_MAX_SCROLL, fr(this.scroll + FLAPPER_RAMP_SCROLL));
+
+    if (this.passed % 4 === 0 && this.spacing > FLAPPER_MIN_SPACING) this.spacing -= 1;
+
+    // The drift is what finally ends it. Gap and spacing bottom out; this keeps
+    // going until the hole can be anywhere on the playfield.
+    if (this.passed % 5 === 0) this.drift = Math.min(Math.max(2, maxGap), this.drift + 1);
+  }
+
+  loseLife() {
+    this.lives -= 1;
+    this.hurt = 20;
+
+    if (this.lives <= 0) return;
+
+    this.y = Math.floor((this.h - 1) / 2);
+    this.vy = 0;
+
+    // Cleared rather than kept: respawning into the column that just killed you
+    // is a life lost on the tick it is granted.
+    this.columns = [];
+    this.lastGapY = clamp(Math.floor((this.h - this.gapH) / 2), 1,
+      Math.max(1, this.h - 1 - this.gapH));
+
+    // passed, gapH, scroll, spacing and drift all survive. The ramp is the
+    // termination guarantee and a life must not rewind it.
+  }
+
+  tickHz(cfg) {
+    const t = fr(clamp01(cfg.speed));
+    return fr(fr(20) + fr(fr(fr(40) * t) * t));
+  }
+
+  step(cfg, input, rng) {
+    if (this.lives <= 0) return;
+
+    let flap = false;
+
+    for (;;) {
+      const b = input.pop();
+      if (b === null) break;
+      if (b === Button.Up || b === Button.Fire) flap = true;
+    }
+
+    this.ticks += 1;
+    if (this.hurt > 0) this.hurt -= 1;
+
+    if (cfg.autopilot) {
+      const skill = clamp01(cfg.skill);
+
+      if (rng.chance((1 - skill) * 0.3)) {
+        flap = rng.chance(0.5);
+      } else {
+        flap = this.chooseFlap();
+      }
+    }
+
+    if (flap) this.vy = -FLAPPER_FLAP;
+
+    this.vy = clamp(fr(this.vy + FLAPPER_GRAVITY), -FLAPPER_MAX_FALL,
+      Math.min(FLAPPER_SINK, FLAPPER_MAX_FALL));
+    this.y = fr(this.y + this.vy);
+
+    // Ceiling and floor both kill. A ceiling that merely stopped the flier
+    // would make holding the button a safe place to wait out the field.
+    if (this.y <= 0 || this.y >= this.h - 1) {
+      this.y = clamp(this.y, 0, this.h - 1);
+      this.loseLife();
+      return;
+    }
+
+    const fy = flapperRound(this.y);
+
+    for (let i = 0; i < this.columns.length; i += 1) {
+      const c = this.columns[i];
+      const from = c.x;
+      c.x = fr(c.x - this.scroll);
+
+      if (this.blocks(c, from, fy)) {
+        this.loseLife();
+        return;
+      }
+
+      // Scored on the tick the right edge passes the flier, which is the tick
+      // it can no longer be hit.
+      if (!c.taken && flapperRound(c.x) + FLAPPER_COL_WIDTH - 1 < this.flierX) {
+        c.taken = true;
+        this.passed += 1;
+        this.scoreValue += 1;
+        this.ramp();
+      }
+    }
+
+    while (this.columns.length > 0
+      && flapperRound(this.columns[0].x) + FLAPPER_COL_WIDTH - 1 < 0) {
+      this.columns.shift();
+    }
+
+    if (this.columns.length === 0
+      || this.columns[this.columns.length - 1].x <= this.w - this.spacing) {
+      this.spawn(rng);
+    }
+  }
+
+  draw(cfg, grid) {
+    grid.clear();
+
+    // Ceiling and floor only. The columns arrive from off-screen right and
+    // leave off-screen left, and a wall at either end would read as the field
+    // being enclosed when the whole point is that it is not.
+    for (let x = 0; x < this.w; x += 1) {
+      grid.set(x, 0, Cell.Wall, 255);
+      grid.set(x, this.h - 1, Cell.Wall, 255);
+    }
+
+    for (let i = 0; i < this.columns.length; i += 1) {
+      const c = this.columns[i];
+      const left = flapperRound(c.x);
+      for (let k = 0; k < FLAPPER_COL_WIDTH; k += 1) {
+        const x = left + k;
+        if (x < 0 || x >= this.w) continue;
+
+        for (let y = 1; y <= this.h - 2; y += 1) {
+          if (y < c.gapY || y >= c.gapY + c.gapH) grid.set(x, y, Cell.Wall, 200);
+        }
+      }
+    }
+
+    grid.set(this.flierX, flapperRound(this.y), Cell.Head, this.hurt > 0 ? 120 : 255);
+  }
+
+  score() { return this.scoreValue; }
+
+  finished() { return this.lives <= 0; }
+
+  intensity() {
+    const maxGap = this.maxGap();
+
+    const tight = maxGap > FLAPPER_MIN_GAP
+      ? 1 - (this.gapH - FLAPPER_MIN_GAP) / (maxGap - FLAPPER_MIN_GAP)
+      : 1;
+
+    const fast = this.scroll / FLAPPER_MAX_SCROLL;
+
+    // A column about to arrive is worth a reaction on its own, whatever the
+    // ramp has got to.
+    let close = 0;
+    for (let i = 0; i < this.columns.length; i += 1) {
+      const left = flapperRound(this.columns[i].x);
+      if (left + FLAPPER_COL_WIDTH - 1 >= this.flierX && left - this.flierX <= 4) close = 0.7;
+    }
+
+    return clamp01(Math.max(close, 0.5 * tight + 0.5 * fast));
+  }
+}
+
+/// Which games this page carries — all fourteen the plugin has, in `GameId`
 /// order. The dropdown is built from these keys, and the notice in
 /// `differences` prints itself if this map and `GAME_NAMES` ever disagree
 /// again.
@@ -6167,6 +6480,7 @@ const GAMES = {
   10: () => new Reflex(),
   11: () => new Rafters(),
   12: () => new Duel(),
+  13: () => new Flapper(),
 };
 
 const PORTED_GAME_NAMES = Object.keys(GAMES).map((i) => GAME_NAMES[i]);
