@@ -15,11 +15,12 @@ themselves.
 
 **Video:** [What it does, in 52 seconds](https://www.youtube.com/watch?v=DZyiCXpSt98)
 
-![Snake, Bricks, Marchers and Drift, on four of the six palettes](docs/hero.png)
+![Chase, Trails, Stacker and Girders, on four of the six palettes](docs/hero.png)
 
-<sub>Four of the games, on four of the six palettes. Rendered by
-`coinopgl`, the offline harness — the real autopilot playing through the real
-cell shader, not a Resolume screen capture.</sub>
+<sub>Four of the thirteen, on four of the six palettes — Chase on Amber, Trails
+on Ice, Stacker on Candy, Girders on Fire. Rendered by `coinopgl`, the offline
+harness: the real autopilot playing through the real cell shader, not a Resolume
+screen capture.</sub>
 
 | Game | What it is |
 | --- | --- |
