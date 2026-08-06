@@ -1,6 +1,6 @@
 # demo/ — the browser demo
 
-Intended for **https://coinop-demo.stoatworks-labs.com**, to be linked from the
+Live at **https://coinop-demo.stoatworks-labs.com**, linked from the
 [project page](https://stoatworks-labs.com/software/coinop/) and from the
 [video plugins page](https://stoatworks-labs.com/video-plugins/).
 
