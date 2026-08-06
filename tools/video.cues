@@ -5,7 +5,7 @@
 # Render with:
 #
 #   ./build/coinopgl --sequence /tmp/co-frames --script tools/video.cues \
-#                    --size 1920x1080 --seconds 51 --fps 30
+#                    --size 1920x1080 --seconds 57 --fps 30
 #
 # Syntax: `T Name=V` sets at a time, `T1..T2 Name=V1..V2` ramps between two
 # (eased, because a parameter that starts and stops abruptly reads as a cut).
@@ -13,13 +13,20 @@
 # Values are the 0..1 the host sees, except Game, Palette, Fit and Aspect, which
 # are indices -- the same split the plugin itself has, see Controls.h.
 #
-# ## v0.2.0: this cut is the eight games that were added
+# ## v0.3.0: Flapper, and the eight this cut inherited
 #
-# The v0.1.0 cut ran through the original five. Re-running that would be a video
-# of the part of the plugin that did not change, so this one shows the new ones
-# and leaves the first five to the release before it. The order is by how quickly
-# each reads on screen: the maze first because everyone knows what a maze is, the
-# fighter last because it is the one that needs a second to parse.
+# The v0.1.0 cut ran through the original five and is still up. The v0.2.0 cut
+# showed the eight that release added -- and is being replaced by this one rather
+# than left alongside it, because it is hours old and two near-identical videos
+# hours apart is the case the seven-day rule exists to prevent.
+#
+# Replacing it means this cut has to carry what that one carried. So it is the
+# eight, unchanged and in their original order, with Flapper in front of them.
+# Flapper leads because it is the new game and because it is the fastest thing
+# here to read: vertical bars with holes in them, and one cell going through.
+# Everything after it is shifted by five and a half seconds and otherwise
+# untouched -- there was nothing wrong with that order and re-cutting it would
+# only risk it.
 #
 # Changing `Game` restarts the simulation (Sim::SetGame), so every segment is a
 # game from its first tick. That is why Speed is pushed up in the segments whose
@@ -28,121 +35,146 @@
 #
 # The pixel-map ending stays, because it is still the thing the plugin is *for*.
 
-# ------------------------------------------------------------ 0s: Chase, Amber
-# A maze carved fresh at every reset, four pursuers, and the loops that make
-# being chased survivable. Amber because the pellets have to read as the thing
-# you want and the pursuers as the thing you do not.
-0.0   Game=6
-0.0   Palette=1
-0.0   Speed=0.62
-0.0   Skill=0.88
-0.0   Difficulty=0.45
+# ------------------------------------------------- 0s: Flapper, Phosphor
+# One button against gravity, through the gaps in a wall that scrolls past. It
+# opens the cut because it is the game this release added and because it is the
+# one that needs no explaining -- the shape of the obstacle tells you the rule.
+#
+# Difficulty low and Skill high on purpose. The ramp makes this game end, and it
+# ends faster the harder it starts; a five-second shot wants the flier threading
+# holes for all five seconds rather than dying at three and restarting into a
+# fresh field.
+#
+# The field is full from the first frame, which it was not when this was written
+# -- see FillField in Flapper.cpp. Before that fix the first two seconds of this
+# very shot were a black rectangle with one white cell in it.
+0.0   Game=13
+0.0   Palette=0
+0.0   Speed=0.55
+0.0   Skill=0.95
+0.0   Difficulty=0.35
 0.0   Grid=0.415
 0.0   Seed=0.25
 0.0   Round=0.25
-0.0   Gap=0.18
-0.0   Glow=0.45
-0.0   React=0.35
+0.0   Gap=0.16
+0.0   Glow=0.50
+0.0   React=0.40
 
-# -------------------------------------------------------- 6.5s: Stacker, Candy
+# ------------------------------------------------------------ 5.5s: Chase, Amber
+# A maze carved fresh at every reset, four pursuers, and the loops that make
+# being chased survivable. Amber because the pellets have to read as the thing
+# you want and the pursuers as the thing you do not.
+5.5   Game=6
+5.5   Palette=1
+5.5   Speed=0.62
+5.5   Skill=0.88
+5.5   Difficulty=0.45
+5.5   Grid=0.415
+5.5   Seed=0.25
+5.5   Round=0.25
+5.5   Gap=0.18
+5.5   Glow=0.45
+5.5   React=0.35
+
+# -------------------------------------------------------- 12s: Stacker, Candy
 # The falling-block game, and the one whose differences are the point: ten mixed
 # polyominoes, and a clear rule that takes any contiguous run rather than a full
 # row -- which is also the only rule that works on a playfield thirty cells wide.
 # Speed high so a stack actually accumulates inside six seconds.
-6.5   Game=5
-6.5   Palette=3
-6.5   Grid=0.30
-6.5   Speed=0.88
-6.5   Skill=0.45
-6.5   Difficulty=0.55
-6.5   Round=0.30
-6.5   Gap=0.16
-6.5   Glow=0.50
+12   Game=5
+12   Palette=3
+12   Grid=0.30
+12   Speed=0.88
+12   Skill=0.45
+12   Difficulty=0.55
+12   Round=0.30
+12   Gap=0.16
+12   Glow=0.50
 
-# ----------------------------------------------------------- 13s: Trails, Ice
+# ----------------------------------------------------------- 18.5s: Trails, Ice
 # Four riders that never stop and never reverse. Deaths are resolved
 # simultaneously, which is why a head-on kills both and not just the second one
 # the loop happened to reach.
-13.0  Game=9
-13.0  Palette=2
-13.0  Grid=0.415
-13.0  Speed=0.80
-13.0  Skill=0.80
-13.0  Difficulty=1.0
-13.0  Round=0.22
-13.0  Gap=0.14
-13.0  Glow=0.55
+18.5  Game=9
+18.5  Palette=2
+18.5  Grid=0.415
+18.5  Speed=0.80
+18.5  Skill=0.80
+18.5  Difficulty=1.0
+18.5  Round=0.22
+18.5  Gap=0.14
+18.5  Glow=0.55
 
-# -------------------------------------------------------- 19.5s: Girders, Fire
+# -------------------------------------------------------- 25s: Girders, Fire
 # Flat floors, alternating roll direction, hazards that cascade back down them.
 # The slope in the original is what made barrels roll; at this resolution a slope
 # is a staircase, so the direction alternates instead.
-19.5  Game=7
-19.5  Palette=5
-19.5  Grid=0.35
-19.5  Speed=0.70
-19.5  Skill=0.85
-19.5  Difficulty=0.75
-19.5  Round=0.25
-19.5  Gap=0.18
-19.5  Glow=0.50
+25  Game=7
+25  Palette=5
+25  Grid=0.35
+25  Speed=0.70
+25  Skill=0.85
+25  Difficulty=0.75
+25  Round=0.25
+25  Gap=0.18
+25  Glow=0.50
 
-# ------------------------------------------------------ 25s: Swarm, Phosphor
+# ------------------------------------------------------ 30.5s: Swarm, Phosphor
 # The formation does not descend. Attackers peel out of it one at a time, fly a
 # curved run at the ship, and come back round to their own slot.
-25.0  Game=8
-25.0  Palette=0
-25.0  Grid=0.33
-25.0  Speed=0.55
-25.0  Skill=0.80
-25.0  Difficulty=0.65
-25.0  Round=0.28
-25.0  Gap=0.16
-25.0  Glow=0.50
-25.0  React=0.45
-
-# --------------------------------------------------------- 30.5s: Reflex, Ice
-# A hazard closes, a prompt opens, and the bar under the arrow is the remaining
-# distance drawn out rather than a second clock counting the same thing.
-30.5  Game=10
-30.5  Palette=2
+30.5  Game=8
+30.5  Palette=0
 30.5  Grid=0.33
 30.5  Speed=0.55
-30.5  Skill=0.90
-30.5  Difficulty=0.35
-30.5  Round=0.25
-30.5  Gap=0.18
-30.5  Glow=0.45
+30.5  Skill=0.80
+30.5  Difficulty=0.65
+30.5  Round=0.28
+30.5  Gap=0.16
+30.5  Glow=0.50
+30.5  React=0.45
 
-# ------------------------------------------------------- 35.5s: Rafters, Mono
+# --------------------------------------------------------- 36s: Reflex, Ice
+# A hazard closes, a prompt opens, and the bar under the arrow is the remaining
+# distance drawn out rather than a second clock counting the same thing.
+36  Game=10
+36  Palette=2
+36  Grid=0.33
+36  Speed=0.55
+36  Skill=0.90
+36  Difficulty=0.35
+36  Round=0.25
+36  Gap=0.18
+36  Glow=0.45
+
+# ------------------------------------------------------- 41s: Rafters, Mono
 # Hit the floor from underneath and whatever is standing on it goes over. Mono
 # because the mechanic is a silhouette -- upright or on its back -- and no hue
 # is doing any of that work.
-35.5  Game=11
-35.5  Palette=4
-35.5  Grid=0.35
-35.5  Speed=0.60
-35.5  Skill=0.90
-35.5  Difficulty=0.60
-35.5  Round=0.25
-35.5  Gap=0.16
-35.5  Glow=0.42
+41  Game=11
+41  Palette=4
+41  Grid=0.35
+41  Speed=0.60
+41  Skill=0.90
+41  Difficulty=0.60
+41  Round=0.25
+41  Gap=0.16
+41  Glow=0.42
 
-# ---------------------------------------------------------- 40s: Duel, Fire
+# ---------------------------------------------------------- 45.5s: Duel, Fire
 # Wind-up, active, recovery. Only the active window is drawn, because drawing
 # the wind-up would tell the other fighter exactly when to block.
-40.0  Game=12
-40.0  Palette=5
-40.0  Grid=0.28
-40.0  Speed=0.55
-40.0  Skill=0.75
-40.0  Difficulty=0.70
-40.0  Round=0.30
-40.0  Gap=0.18
-40.0  Glow=0.55
-40.0  React=0.45
+45.5  Game=12
+45.5  Palette=5
+45.5  Grid=0.28
+45.5  Speed=0.55
+45.5  Skill=0.75
+45.5  Difficulty=0.70
+45.5  Round=0.30
+45.5  Gap=0.18
+45.5  Glow=0.55
+45.5  React=0.45
 
-# ------------------------------------------------ 44.5s: the pixel-map ending
+# ------------------------------------------------ 50s: the pixel-map ending
 # Drop the grid to nineteen cells across and open the gaps. This is what the
 # plugin looks like when the composition is a fixture layout and Resolume's
 # pixel mapper is sampling it.
@@ -152,17 +184,17 @@
 # Trails was tried here and a five-second-old light-cycle board is nearly black,
 # which is the one thing this shot cannot be. Chase is dense from tick one
 # because the maze starts full of pellets.
-44.5  Game=6
-44.5  Palette=5
-44.5  Grid=0.415
-44.5  Speed=0.55
-44.5  Skill=0.90
-44.5  Difficulty=0.35
-44.5  Round=0.20
-44.5  Gap=0.14
-44.5  Glow=0.55
+50  Game=6
+50  Palette=5
+50  Grid=0.415
+50  Speed=0.55
+50  Skill=0.90
+50  Difficulty=0.35
+50  Round=0.20
+50  Gap=0.14
+50  Glow=0.55
 
-46.0..50.5  Grid=0.415..0.25
-46.0..50.5  Gap=0.14..0.42
-46.0..50.5  Round=0.20..1.00
-46.0..50.5  Glow=0.55..0.80
+51.5..56  Grid=0.415..0.25
+51.5..56  Gap=0.14..0.42
+51.5..56  Round=0.20..1.00
+51.5..56  Glow=0.55..0.80
