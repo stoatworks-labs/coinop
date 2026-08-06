@@ -128,9 +128,16 @@ private:
 	static int Round( float v ) { return int( std::floor( v + 0.5f ) ); }
 
 	int MaxGap() const;
+	void SpawnAt( float x, Rng& rng );
 	void Spawn( Rng& rng );
+
+	/// Fill the playfield with columns as though the run were already under way,
+	/// leaving the flier a runway. See the note in the .cpp -- an empty field is
+	/// a black layer, and this game starts one three times a game without it.
+	void FillField( Rng& rng );
+
 	void Ramp();
-	void LoseLife();
+	void LoseLife( Rng& rng );
 	bool Blocks( const Column& c, float sweptFrom, int y ) const;
 
 	/// Row the autopilot is trying to be on: the middle of the next hole it has

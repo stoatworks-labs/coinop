@@ -11,14 +11,6 @@ namespace
 
 /// Gravity and the flap, in cells and ticks.
 ///
-/// The pair is chosen so a flap from rest rises a shade over three cells before
-/// it turns over -- `kFlap^2 / (2 * kGravity)` -- which is the height that makes
-/// a gap of four feel like a gap of four. Raise the flap without raising gravity
-/// and the flier climbs the whole playfield on one press, which reads as a
-/// balloon rather than a bird and makes every hole below the top unreachable in
-/// one move.
-/// Gravity and the flap, in cells and ticks.
-///
 /// A flap rises `kFlap^2 / (2 * kGravity)` cells before it turns over, which at
 /// these numbers is a shade over one cell, in about seven ticks. That is smaller
 /// than it first looks right: the hop wants to be small against the playfield,
@@ -126,10 +118,41 @@ bool Flapper::ChooseFlap() const
 	return ( mY + kDamp * mVy ) > float( TargetRow() );
 }
 
+/**
+	Fill the playfield as though the run were already under way.
+
+	Without this the field starts empty and takes about two seconds to scroll in
+	from the right -- and because losing a life clears the columns, it does it
+	again on every death, three times a game. Rendered out and looked at, the
+	first two seconds are a black rectangle with one white cell bobbing in it,
+	which is the same fault Swarm and Reflex shipped with and the reason this
+	repo's rule is to dump frames and look rather than to trust the assertions.
+	No state check catches it: an empty playfield is a perfectly legal one.
+
+	The flier still gets a runway. The first column goes far enough ahead that
+	there is time to read it and climb, which is also what stops a respawn
+	landing the flier in a wall on the tick it is granted -- the reason the field
+	was cleared on death in the first place.
+*/
+void Flapper::FillField( Rng& rng )
+{
+	mColumn.clear();
+
+	const float first = float( mFlierX + std::max( mSpacing, mW / 3 ) );
+
+	for( float x = first; x < float( mW + mSpacing ); x += float( mSpacing ) )
+		SpawnAt( x, rng );
+}
+
 void Flapper::Spawn( Rng& rng )
 {
+	SpawnAt( mColumn.empty() ? float( mW ) : mColumn.back().x + float( mSpacing ), rng );
+}
+
+void Flapper::SpawnAt( float x, Rng& rng )
+{
 	Column c;
-	c.x = mColumn.empty() ? float( mW ) : mColumn.back().x + float( mSpacing );
+	c.x = x;
 
 	// The hole walks from the last one rather than being drawn fresh each time.
 	// Independent holes make an early field that is already unplayable and a
@@ -175,8 +198,6 @@ void Flapper::Ramp()
 
 void Flapper::Reset( const GameConfig& cfg, Rng& rng )
 {
-	(void)rng;
-
 	mW = cfg.gridW;
 	mH = cfg.gridH;
 
@@ -205,7 +226,7 @@ void Flapper::Reset( const GameConfig& cfg, Rng& rng )
 
 	mLastGapY = std::clamp( ( mH - mGapH ) / 2, 1, std::max( 1, mH - 1 - mGapH ) );
 
-	mColumn.clear();
+	FillField( rng );
 
 	mScore  = 0;
 	mPassed = 0;
@@ -222,7 +243,7 @@ float Flapper::TickHz( const GameConfig& cfg ) const
 	return 20.0f + 40.0f * t * t;
 }
 
-void Flapper::LoseLife()
+void Flapper::LoseLife( Rng& rng )
 {
 	--mLives;
 	mHurt = 20;
@@ -233,11 +254,12 @@ void Flapper::LoseLife()
 	mY  = float( ( mH - 1 ) / 2 );
 	mVy = 0.0f;
 
-	// The field is cleared rather than kept. Respawning into the column that
-	// just killed you is a life lost on the tick it is granted, and three of
-	// those is a game that ends without the flier ever moving.
-	mColumn.clear();
+	// Rebuilt rather than kept. Respawning into the column that just killed you
+	// is a life lost on the tick it is granted -- but rebuilding it rather than
+	// leaving it empty is what stops the playfield going black for two seconds
+	// on every death. See FillField.
 	mLastGapY = std::clamp( ( mH - mGapH ) / 2, 1, std::max( 1, mH - 1 - mGapH ) );
+	FillField( rng );
 
 	// mPassed, mGapH, mScroll, mSpacing and mDrift all survive. The ramp is the
 	// termination guarantee and a life must not rewind it.
@@ -293,7 +315,7 @@ void Flapper::Step( const GameConfig& cfg, Input& in, Rng& rng )
 	if( mY <= 0.0f || mY >= float( mH - 1 ) )
 	{
 		mY = std::clamp( mY, 0.0f, float( mH - 1 ) );
-		LoseLife();
+		LoseLife( rng );
 		return;
 	}
 
@@ -306,7 +328,7 @@ void Flapper::Step( const GameConfig& cfg, Input& in, Rng& rng )
 
 		if( Blocks( c, from, fy ) )
 		{
-			LoseLife();
+			LoseLife( rng );
 			return;
 		}
 

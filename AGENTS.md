@@ -323,7 +323,7 @@ Flapper is the fourteenth.
 
 Verified offline, in two harnesses, on macOS:
 
-- `coinoptest` — 266 checks. Determinism per game, the three timing defences,
+- `coinoptest` — 268 checks. Determinism per game, the three timing defences,
   and per-game invariants: Snake's turn queue and reversal guard, Bricks'
   tunnelling and both locks, Rally's termination, Marchers' formation bounds,
   Drift's wrapping, Stacker's clear rule and fall ramp, Chase's maze loops and
@@ -341,6 +341,21 @@ The four assertions worth knowing are the ones that failed first and were the
 point of writing the test: Stacker and Reflex both terminating at Skill 1.0,
 Trails giving neither rider a structural advantage in a head-on, and Rafters
 surviving longer at high Skill than at low. The last one failed twice.
+
+**Neither harness can see how a game looks, and two of Flapper's three real
+faults were invisible to both.** Its first autopilot never passed a single
+column on any seed while satisfying every state assertion in the file — dying
+in bounds, having touched nothing, is a legal way to play. And its playfield
+scrolled in from the right over two seconds and did it again after every death,
+so a game showed a black rectangle with one cell bobbing in it three times; an
+empty playfield is a legal playfield too. The first was caught by asserting
+`Score() > 0`, which is now in the file. The second was caught only by rendering
+the opening seconds with `coinopgl --sequence` and looking at them.
+
+So: **render it and look at it.** That is how Swarm's ship was found overdrawing
+the bottom border, and how Reflex and Duel were found leaving two-thirds of the
+playfield empty. A passing harness means the rules are right, not that there is
+anything on screen.
 
 **It has never been loaded into Resolume.** Only compiled, simulated, rendered
 and measured offline. The FFGL parameter and clock plumbing in `Coinop.cpp` is

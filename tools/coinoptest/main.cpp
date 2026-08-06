@@ -1373,6 +1373,37 @@ void TestFlapper()
 	}
 
 	Check( sawColumn, "columns arrive" );
+
+	// The playfield is populated before the first tick, and again after every
+	// death. This was not true to begin with: the field scrolled in from the
+	// right over about two seconds, and losing a life cleared it, so a game with
+	// three lives showed a black rectangle with one cell in it three times. It
+	// passed every check in this section while doing so, because an empty
+	// playfield is a legal playfield -- it was only caught by rendering the
+	// opening seconds out and looking at them.
+	{
+		GameConfig c = BaseConfig();
+		Rng r( c.seed );
+		Input i2;
+		Flapper g;
+		g.Reset( c, r );
+
+		Check( g.Columns() > 0, "the field is populated before the first tick" );
+
+		int lives      = g.Lives();
+		bool afterDeath = true;
+		for( int t = 0; t < 40000 && !g.Finished(); ++t )
+		{
+			g.Step( c, i2, r );
+
+			if( g.Lives() < lives && g.Lives() > 0 )
+				afterDeath = afterDeath && g.Columns() > 0;
+
+			lives = g.Lives();
+		}
+
+		Check( afterDeath, "and repopulated on the tick a life is lost" );
+	}
 	Check( boundsOk, "the flier stays between the ceiling and the floor" );
 	Check( clearOk, "the flier never ends a tick inside a column" );
 	Check( rampOk, "the ramp never passes its own floors" );

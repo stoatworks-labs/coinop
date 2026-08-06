@@ -6225,7 +6225,7 @@ class Flapper {
     this.lastGapY = clamp(Math.floor((this.h - this.gapH) / 2), 1,
       Math.max(1, this.h - 1 - this.gapH));
 
-    this.columns = [];
+    this.fillField(rng);
 
     this.scoreValue = 0;
     this.passed = 0;
@@ -6280,10 +6280,29 @@ class Flapper {
     return fr(this.y + fr(FLAPPER_DAMP * this.vy)) > this.targetRow();
   }
 
+  // Fill the playfield as though the run were already under way. Without it the
+  // field starts empty and scrolls in from the right over about two seconds,
+  // and because losing a life clears the columns it does it again on every
+  // death — three times a game. Rendered out and looked at, those two seconds
+  // are a black rectangle with one white cell bobbing in it. No state check
+  // catches that; an empty playfield is a legal one.
+  fillField(rng) {
+    this.columns = [];
+
+    const first = fr(this.flierX + Math.max(this.spacing, Math.floor(this.w / 3)));
+
+    for (let x = first; x < fr(this.w + this.spacing); x = fr(x + fr(this.spacing))) {
+      this.spawnAt(x, rng);
+    }
+  }
+
   spawn(rng) {
-    const x = this.columns.length === 0
+    this.spawnAt(this.columns.length === 0
       ? fr(this.w)
-      : fr(this.columns[this.columns.length - 1].x + fr(this.spacing));
+      : fr(this.columns[this.columns.length - 1].x + fr(this.spacing)), rng);
+  }
+
+  spawnAt(x, rng) {
 
     // The hole walks from the last one rather than being drawn fresh.
     // Independent holes make an early field already unplayable and a late field
@@ -6315,7 +6334,7 @@ class Flapper {
     if (this.passed % 5 === 0) this.drift = Math.min(Math.max(2, maxGap), this.drift + 1);
   }
 
-  loseLife() {
+  loseLife(rng) {
     this.lives -= 1;
     this.hurt = 20;
 
@@ -6324,11 +6343,12 @@ class Flapper {
     this.y = Math.floor((this.h - 1) / 2);
     this.vy = 0;
 
-    // Cleared rather than kept: respawning into the column that just killed you
-    // is a life lost on the tick it is granted.
-    this.columns = [];
+    // Rebuilt rather than kept: respawning into the column that just killed you
+    // is a life lost on the tick it is granted — but rebuilding beats leaving it
+    // empty, which is two black seconds on every death. See fillField.
     this.lastGapY = clamp(Math.floor((this.h - this.gapH) / 2), 1,
       Math.max(1, this.h - 1 - this.gapH));
+    this.fillField(rng);
 
     // passed, gapH, scroll, spacing and drift all survive. The ramp is the
     // termination guarantee and a life must not rewind it.
@@ -6373,7 +6393,7 @@ class Flapper {
     // would make holding the button a safe place to wait out the field.
     if (this.y <= 0 || this.y >= this.h - 1) {
       this.y = clamp(this.y, 0, this.h - 1);
-      this.loseLife();
+      this.loseLife(rng);
       return;
     }
 
@@ -6385,7 +6405,7 @@ class Flapper {
       c.x = fr(c.x - this.scroll);
 
       if (this.blocks(c, from, fy)) {
-        this.loseLife();
+        this.loseLife(rng);
         return;
       }
 
