@@ -242,6 +242,30 @@ which then misses, and target selection, which then turns the long way round.
 
 ---
 
+## The Windows build fails in ways macOS cannot show you
+
+Two of these have now cost a release build each, and both have the same shape:
+the code is correct C++, libc++ is permissive about something MSVC is not, and
+the mac job goes green first so the failure arrives after everything looked
+fine.
+
+**Include what you use, especially `<cmath>`.** libc++ pulls `<cmath>` in
+through `<algorithm>`; MSVC's STL does not. Five of the eight games added in
+v0.2.0 called `std::lround` with only `<algorithm>` included, built and passed
+243 checks on this Mac, and failed to compile on Windows. The first v0.2.0 build
+died on exactly that, after macOS had already succeeded.
+
+**`windows.h` defines `min` and `max` as macros**, which turns every
+`std::min` into `std::(...)` and reports an error naming neither. `NOMINMAX` is
+set in CMakeLists.txt for this and must stay.
+
+There is no Windows compiler on this machine, so neither is catchable locally.
+The cheap defence is the habit: a file that names `std::lround`, `std::sin` or
+`std::floor` includes `<cmath>` itself, and does not rely on a header it
+happens to get for free.
+
+---
+
 ## Naming, and the line the games are written to
 
 The mechanics are the public domain part; the names are not. *Breakout* and

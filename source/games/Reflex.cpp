@@ -2,7 +2,10 @@
 
 #include "Raster.h"
 
+// <cmath> explicitly: libc++ leaks it through <algorithm> and MSVC does not.
+// See AGENTS.md -- this is a macOS-green, Windows-red failure by construction.
 #include <algorithm>
+#include <cmath>
 
 namespace coinop
 {
