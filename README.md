@@ -13,7 +13,8 @@ Thirteen playable arcade games for [Resolume](https://resolume.com) Arena and
 Avenue, as a pair of FFGL plugins. Driven by MIDI or OSC, or left to play
 themselves.
 
-**Video:** [What it does, in 52 seconds](https://www.youtube.com/watch?v=DZyiCXpSt98)
+**Video:** [The eight games v0.2.0 added, in 58 seconds](https://www.youtube.com/watch?v=SNqhfKOn-xs)
+ · [the original five, from v0.1.0](https://www.youtube.com/watch?v=DZyiCXpSt98)
 
 ![Chase, Trails, Stacker and Girders, on four of the six palettes](docs/hero.png)
 
