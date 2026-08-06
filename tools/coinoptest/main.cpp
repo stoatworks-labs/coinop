@@ -18,10 +18,18 @@
 #include "Raster.h"
 #include "Sim.h"
 #include "games/Bricks.h"
+#include "games/Chase.h"
 #include "games/Drift.h"
+#include "games/Duel.h"
+#include "games/Girders.h"
 #include "games/Marchers.h"
+#include "games/Rafters.h"
 #include "games/Rally.h"
+#include "games/Reflex.h"
 #include "games/Snake.h"
+#include "games/Stacker.h"
+#include "games/Swarm.h"
+#include "games/Trails.h"
 
 #include <cmath>
 #include <cstdio>
@@ -633,6 +641,679 @@ void TestDrift()
 }
 
 //---------------------------------------------------------------------------
+// Stacker. The falling-block game, and the one whose *differences* from the
+// obvious implementation are the thing worth asserting -- the clear rule, the
+// board that is whatever size the Grid parameter says, and the fall ramp that
+// is the only reason a good autopilot ever tops out.
+//---------------------------------------------------------------------------
+void TestStacker()
+{
+	Section( "Stacker" );
+
+	// The run length is derived from the well, which is what lets one game work
+	// at 12 cells across and at 128. A fixed number would be unclearable at one
+	// end and trivial at the other.
+	for( int w : { 12, 32, 96 } )
+	{
+		GameConfig cfg = BaseConfig();
+		cfg.gridW      = w;
+		cfg.gridH      = std::max( 10, w * 3 / 4 );
+
+		Rng rng( cfg.seed );
+		Stacker game;
+		game.Reset( cfg, rng );
+
+		const int run = game.RunLength();
+		Check( run >= 4 && run <= 12 && run <= w - 2,
+		       "Stacker: run length suits a " + std::to_string( w ) + "-wide well (" +
+		           std::to_string( run ) + ")" );
+	}
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Stacker game;
+	game.Reset( cfg, rng );
+
+	const int wellCells = ( cfg.gridW - 2 ) * ( cfg.gridH - 2 );
+
+	bool heightSane = true;
+	bool fillSane   = true;
+	int prevFilled  = 0;
+	int clears      = 0;
+
+	for( int i = 0; i < 40000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		heightSane = heightSane && game.StackHeight() <= cfg.gridH - 2;
+		fillSane   = fillSane && game.FilledCells() <= wellCells;
+
+		// A clear removes at least a whole run. Anything less means the run
+		// finder and the collapse disagree about which cells went, which is the
+		// bug that silently eats a column.
+		const int filled = game.FilledCells();
+		if( filled < prevFilled )
+		{
+			++clears;
+			Check( prevFilled - filled >= game.RunLength(),
+			       "Stacker: a clear removes at least one whole run" );
+		}
+		prevFilled = filled;
+
+		if( clears > 3 )
+			break;
+	}
+
+	Check( heightSane, "Stacker: the stack never leaves the well" );
+	Check( fillSane, "Stacker: the board never holds more cells than it has" );
+	Check( clears > 0, "Stacker: runs actually clear under autopilot" );
+
+	// The fall ramp. This is the load-bearing one: without it a Skill 1.0
+	// autopilot reached one tick per row and cleared runs indefinitely, and the
+	// game never ended at all -- measured, before `mFallRows` existed.
+	{
+		GameConfig hard = BaseConfig();
+		hard.skill      = 1.0f;
+
+		Rng r2( 99 );
+		Input in2;
+		Stacker g2;
+		g2.Reset( hard, r2 );
+
+		bool ramped = false;
+		int ticks   = 0;
+		for( ; ticks < 200000 && !g2.Finished(); ++ticks )
+		{
+			g2.Step( hard, in2, r2 );
+			ramped = ramped || g2.FallRows() > 1 || g2.FallInterval() <= 1;
+		}
+
+		Check( ramped, "Stacker: the fall rate ramps past what one step a tick can steer" );
+		Check( g2.Finished(), "Stacker: even a perfect autopilot eventually tops out" );
+		if( gVerbose )
+			std::printf( "       (topped out after %d ticks, level %d, %d rows a step)\n",
+			             ticks, g2.Level(), g2.FallRows() );
+	}
+}
+
+//---------------------------------------------------------------------------
+// Chase. The maze is generated, so the assertions are about the maze as much
+// as about the game.
+//---------------------------------------------------------------------------
+void TestChase()
+{
+	Section( "Chase" );
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Chase game;
+	game.Reset( cfg, rng );
+
+	Check( game.PelletsLeft() > 0, "a maze starts with pellets in it" );
+
+	// The loop pass. A perfect maze carved on the odd lattice has exactly
+	// `rooms + (rooms - 1)` open cells -- every room plus one corridor per edge
+	// of a spanning tree. More than that means walls came down afterwards, and
+	// walls coming down is the difference between a maze you can be chased
+	// through and a maze that is all dead ends.
+	{
+		const int roomsX = ( cfg.gridW - 2 + 1 ) / 2;
+		const int roomsY = ( cfg.gridH - 2 + 1 ) / 2;
+		const int perfect = roomsX * roomsY * 2 - 1;
+		Check( game.OpenCells() > perfect,
+		       "the maze has loops in it, not just a spanning tree (" +
+		           std::to_string( game.OpenCells() ) + " > " + std::to_string( perfect ) + ")" );
+	}
+
+	bool inBounds   = true;
+	bool noReversal = true;
+	bool sawFright  = false;
+	int lives       = game.Lives();
+	bool livesSane  = true;
+
+	IVec prev[ Chase::kPursuers ];
+	IVec prev2[ Chase::kPursuers ];
+	bool wasReviving[ Chase::kPursuers ] = {};
+	for( int p = 0; p < Chase::kPursuers; ++p )
+		prev[ p ] = prev2[ p ] = game.Pursuer( p );
+
+	int level = game.Level();
+
+	for( int i = 0; i < 60000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		// A lost life or a finished level moves everything at once.
+		const bool teleported = game.Lives() != lives || game.Level() != level;
+		level                 = game.Level();
+
+		sawFright = sawFright || game.Fright() > 0;
+
+		const IVec pl = game.Player();
+		inBounds = inBounds && game.Open( pl.x, pl.y );
+
+		livesSane = livesSane && game.Lives() <= lives;
+		lives     = game.Lives();
+
+		for( int p = 0; p < Chase::kPursuers; ++p )
+		{
+			const IVec now  = game.Pursuer( p );
+			const int moved = std::abs( int( now.x ) - int( prev[ p ].x ) ) +
+			                  std::abs( int( now.y ) - int( prev[ p ].y ) );
+
+			// A teleport rather than a step: eaten and sent home, a life lost,
+			// or a new maze. The history restarts, or the jump reads as a
+			// reversal -- and an eaten pursuer whose home is one cell away
+			// jumps a distance indistinguishable from a step, which is why
+			// `Reviving` is checked as well as the distance.
+			if( moved > 1 || game.Reviving( p ) || wasReviving[ p ] || teleported )
+			{
+				prev2[ p ] = prev[ p ] = now;
+				wasReviving[ p ]       = game.Reviving( p );
+				continue;
+			}
+
+			wasReviving[ p ] = false;
+
+			// Reversing is banned *unless there is nothing else*, and the rule
+			// is what makes a corridor safe to commit to -- without it a
+			// pursuer at a junction oscillates on the spot. So a reversal is
+			// only a fault when the cell it turned around in had another way
+			// out, which is exactly what a dead end does not.
+			if( moved == 1 && prev[ p ] != prev2[ p ] && now == prev2[ p ] )
+			{
+				int exits = 0;
+				for( unsigned d = 0; d < unsigned( Dir::Count ); ++d )
+				{
+					const IVec n = Ahead( prev[ p ], Dir( d ) );
+					if( n != prev2[ p ] && game.Open( n.x, n.y ) )
+						++exits;
+				}
+
+				if( exits > 0 )
+					noReversal = false;
+			}
+
+			if( moved == 1 )
+			{
+				prev2[ p ] = prev[ p ];
+				prev[ p ]  = now;
+			}
+		}
+	}
+
+	Check( inBounds, "the player never leaves the corridors" );
+	Check( noReversal, "pursuers never reverse on the spot" );
+	Check( sawFright, "a power pellet gets eaten and turns the board around" );
+	Check( livesSane, "lives only ever go down" );
+	Check( game.Finished(), "a game of Chase eventually ends" );
+
+	// Skill has to matter, or Autoplay has one setting.
+	auto scoreAt = []( float skill ) {
+		GameConfig c = BaseConfig();
+		c.skill      = skill;
+		Rng r( 4242 );
+		Input i2;
+		Chase g;
+		g.Reset( c, r );
+		for( int t = 0; t < 12000 && !g.Finished(); ++t )
+			g.Step( c, i2, r );
+		return g.Score();
+	};
+
+	const int dim = scoreAt( 0.05f );
+	const int good = scoreAt( 1.0f );
+	Check( good > dim, "a skilled player eats more than a hopeless one (" +
+	                       std::to_string( good ) + " > " + std::to_string( dim ) + ")" );
+}
+
+//---------------------------------------------------------------------------
+// Girders. Rows are numbered from the bottom and that is where every sign
+// error in the file comes from, so the geometry is asserted first.
+//---------------------------------------------------------------------------
+void TestGirders()
+{
+	Section( "Girders" );
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Girders game;
+	game.Reset( cfg, rng );
+
+	Check( game.Rows() >= 2, "a level has floors to climb" );
+
+	// Row 0 is the bottom and the last row is the top. Getting this backwards
+	// puts the prize on the floor the climber starts on and the game is won on
+	// the first tick.
+	bool ordered = true;
+	for( int r = 1; r < game.Rows(); ++r )
+		ordered = ordered && game.RowY( r ) < game.RowY( r - 1 );
+
+	Check( ordered, "floors are ordered bottom-up, row 0 lowest" );
+	Check( game.RowY( game.Rows() - 1 ) >= 1 &&
+	           game.RowY( 0 ) <= cfg.gridH - 2,
+	       "every floor is inside the playfield" );
+
+	bool rowSane   = true;
+	bool sawBarrel = false;
+	bool climbed   = false;
+	int lives      = game.Lives();
+	bool livesSane = true;
+
+	for( int i = 0; i < 60000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		sawBarrel = sawBarrel || game.Barrels() > 0;
+		climbed   = climbed || game.ClimberRow() > 0;
+		rowSane   = rowSane && game.ClimberRow() >= 0 && game.ClimberRow() < game.Rows();
+
+		livesSane = livesSane && game.Lives() <= lives;
+		lives     = game.Lives();
+	}
+
+	Check( sawBarrel, "hazards are released and roll" );
+	Check( climbed, "the climber gets off the bottom floor" );
+	Check( rowSane, "the climber is always on a floor that exists" );
+	Check( livesSane, "lives only ever go down" );
+	Check( game.Finished(), "a game of Girders eventually ends" );
+}
+
+//---------------------------------------------------------------------------
+// Swarm. The thing that makes it not Marchers is that attackers leave the
+// formation and come back, so that is what is checked.
+//---------------------------------------------------------------------------
+void TestSwarm()
+{
+	Section( "Swarm" );
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Swarm game;
+	game.Reset( cfg, rng );
+
+	const int startAlive = game.Alive();
+	Check( startAlive > 0, "a wave starts populated" );
+
+	bool sawDive   = false;
+	bool sawRejoin = false;
+	bool shipOk    = true;
+	bool countsOk  = true;
+	int peakDiving = 0;
+	int lives      = game.Lives();
+	bool livesSane = true;
+
+	for( int i = 0; i < 60000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		const int diving = game.Diving();
+		peakDiving       = std::max( peakDiving, diving );
+		sawDive          = sawDive || diving > 0;
+
+		// A diver that comes back is the whole point -- see the header. If
+		// divers only ever left, this would never see the count fall while the
+		// number alive stayed put.
+		if( sawDive && diving == 0 && game.Alive() > 0 )
+			sawRejoin = true;
+
+		countsOk = countsOk && diving <= game.Alive();
+		shipOk   = shipOk && game.ShipX() >= 1 && game.ShipX() <= cfg.gridW - 2;
+
+		livesSane = livesSane && game.Lives() <= lives;
+		lives     = game.Lives();
+	}
+
+	Check( sawDive, "attackers peel out of the formation" );
+	Check( sawRejoin, "and the formation goes quiet again, so they rejoined" );
+	Check( countsOk, "never more divers than attackers alive" );
+	Check( shipOk, "the ship stays on the playfield" );
+	Check( livesSane, "lives only ever go down" );
+	Check( game.Finished(), "a game of Swarm eventually ends" );
+	if( gVerbose )
+		std::printf( "       (reached wave %d, peak %d diving)\n", game.Wave(), peakDiving );
+
+	// Skill has to reach the dodge, not just the aim. Aiming at a diver that
+	// has already got low lines the ship up under the thing about to land on
+	// it, and before the dodge existed every Skill lost three lives inside
+	// three hundred ticks.
+	auto swarmScore = []( float skill ) {
+		int total = 0;
+		for( uint64_t seed = 1; seed <= 6; ++seed )
+		{
+			GameConfig c = BaseConfig();
+			c.skill      = skill;
+			c.seed       = seed;
+
+			Rng r( seed );
+			Input i2;
+			Swarm g;
+			g.Reset( c, r );
+			for( int t = 0; t < 20000 && !g.Finished(); ++t )
+				g.Step( c, i2, r );
+
+			total += g.Score();
+		}
+		return total;
+	};
+
+	const int poor = swarmScore( 0.1f );
+	const int able = swarmScore( 1.0f );
+	Check( able > poor, "a skilled gunner outscores a hopeless one (" +
+	                        std::to_string( able ) + " > " + std::to_string( poor ) + ")" );
+}
+
+//---------------------------------------------------------------------------
+// Trails. The assertion that matters is the one about simultaneity, because
+// the bug it guards against is invisible in a single round.
+//---------------------------------------------------------------------------
+void TestTrails()
+{
+	Section( "Trails" );
+
+	GameConfig cfg = BaseConfig();
+	cfg.difficulty = 1.0f;// four riders
+
+	Rng rng( cfg.seed );
+	Input in;
+	Trails game;
+	game.Reset( cfg, rng );
+
+	Check( game.Riders() == Trails::kMaxRiders, "Difficulty at full puts four riders out" );
+	Check( game.AliveCount() == game.Riders(), "everybody starts the round alive" );
+
+	bool trailGrows = true;
+	bool boundsOk   = true;
+	int prevTrail   = game.TrailCells();
+	int prevRound   = game.Round();
+	int prevAlive   = game.AliveCount();
+
+	for( int i = 0; i < 40000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		for( int r = 0; r < game.Riders(); ++r )
+		{
+			if( !game.Alive( r ) )
+				continue;
+
+			const IVec p = game.Position( r );
+			boundsOk = boundsOk && p.x >= 1 && p.y >= 1 && p.x <= cfg.gridW - 2 &&
+			           p.y <= cfg.gridH - 2;
+		}
+
+		// Trails are permanent within a round. The only time the count may fall
+		// is the wipe, which happens when the between-rounds hold expires --
+		// several ticks *after* the round number changed, so the round number
+		// alone does not identify it. One or fewer riders standing does.
+		const int trail = game.TrailCells();
+		if( trail < prevTrail && prevAlive > 1 )
+			trailGrows = false;
+
+		prevTrail = trail;
+		prevAlive = game.AliveCount();
+		prevRound = game.Round();
+	}
+
+	Check( boundsOk, "riders never leave the arena" );
+	Check( trailGrows, "a trail is never unwritten inside a round" );
+	Check( game.Finished(), "a match of Trails eventually ends" );
+
+	// The head-on. Resolving deaths inside the movement loop hands rider 0
+	// every head-on collision in the game, because it arrives first and the
+	// cell is solid by the time rider 1 is asked. It is invisible in one round
+	// and obvious over forty matches, which is why this is a sweep.
+	int winsByZero  = 0;
+	int winsByOther = 0;
+	for( uint64_t seed = 1; seed <= 40; ++seed )
+	{
+		GameConfig c = BaseConfig();
+		c.difficulty = 0.0f;// two riders, so a head-on is between 0 and 1
+		c.seed       = seed;
+		c.skill      = 0.5f;
+
+		Rng r( seed );
+		Input i2;
+		Trails g;
+		g.Reset( c, r );
+
+		for( int t = 0; t < 20000 && !g.Finished(); ++t )
+			g.Step( c, i2, r );
+
+		winsByZero += g.Wins( 0 );
+		winsByOther += g.Wins( 1 );
+	}
+
+	Check( winsByZero > 0 && winsByOther > 0,
+	       "neither rider has a structural advantage (" + std::to_string( winsByZero ) +
+	           " vs " + std::to_string( winsByOther ) + ")" );
+}
+
+//---------------------------------------------------------------------------
+// Reflex. One claim in the header carries the whole game: it terminates even
+// at Skill 1.0, because the window closes faster than anything can react.
+//---------------------------------------------------------------------------
+void TestReflex()
+{
+	Section( "Reflex" );
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Reflex game;
+	game.Reset( cfg, rng );
+
+	const int startLead = game.Lead();
+	Check( startLead > 2, "the window starts open" );
+
+	bool sawPrompt = false;
+	bool leadSane  = true;
+	int minLead    = startLead;
+	int lives      = game.Lives();
+	bool livesSane = true;
+
+	for( int i = 0; i < 60000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		sawPrompt = sawPrompt || game.PromptOpen();
+		minLead   = std::min( minLead, game.Lead() );
+		leadSane  = leadSane && game.Lead() >= 2 && game.Lead() <= startLead;
+
+		livesSane = livesSane && game.Lives() <= lives;
+		lives     = game.Lives();
+	}
+
+	Check( sawPrompt, "prompts open" );
+	Check( leadSane, "the window never inverts or opens wider than it started" );
+	Check( livesSane, "lives only ever go down" );
+	Check( game.Finished(), "a game of Reflex eventually ends" );
+
+	// The one that matters. A reaction test with a fixed window is a game the
+	// machine simply wins, so the window has to close faster than the two-tick
+	// floor on its reaction -- otherwise the layer shows one immortal run for
+	// the whole show.
+	{
+		GameConfig perfect = BaseConfig();
+		perfect.skill      = 1.0f;
+
+		Rng r2( 31337 );
+		Input in2;
+		Reflex g2;
+		g2.Reset( perfect, r2 );
+
+		int ticks = 0;
+		for( ; ticks < 200000 && !g2.Finished(); ++ticks )
+			g2.Step( perfect, in2, r2 );
+
+		Check( g2.Finished(), "even a perfect reaction eventually runs out of window" );
+		if( gVerbose )
+			std::printf( "       (perfect play ended after %d ticks, score %d, lead %d)\n",
+			             ticks, g2.Score(), g2.Lead() );
+	}
+}
+
+//---------------------------------------------------------------------------
+// Rafters. The mechanic is the bump, so the test is that the bump happens and
+// that what it hits ends up on its back.
+//---------------------------------------------------------------------------
+void TestRafters()
+{
+	Section( "Rafters" );
+
+	GameConfig cfg = BaseConfig();
+	cfg.skill      = 0.9f;
+
+	Rng rng( cfg.seed );
+	Input in;
+	Rafters game;
+	game.Reset( cfg, rng );
+
+	bool sawCrawler = false;
+	bool sawFlip    = false;
+	bool standing   = true;
+	bool boundsOk   = true;
+	int lives       = game.Lives();
+	bool livesSane  = true;
+
+	for( int i = 0; i < 80000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		sawCrawler = sawCrawler || game.Crawlers() > 0;
+		sawFlip    = sawFlip || game.Flipped() > 0;
+
+		const IVec p = game.Player();
+		boundsOk = boundsOk && p.x >= 1 && p.x <= cfg.gridW - 2 && p.y >= 1 &&
+		           p.y <= cfg.gridH - 2;
+
+		// One cell tall, one cell thick, and the clamp on vertical speed is
+		// what keeps that true. An actor that falls more than a cell a tick
+		// steps straight through a platform without testing it, and the
+		// symptom is a player standing inside solid rock.
+		standing = standing && !game.Solid( p.x, p.y );
+	}
+
+	Check( sawCrawler, "crawlers are released" );
+	Check( sawFlip, "hitting the floor from below flips what is standing on it" );
+	Check( boundsOk, "the player stays on the playfield" );
+	Check( standing, "the player never ends a tick inside a platform" );
+	Check( livesSane, "lives only ever go down" );
+	Check( game.Finished(), "a game of Rafters eventually ends" );
+	if( gVerbose )
+		std::printf( "       (reached wave %d, score %d)\n", game.Wave(), game.Score() );
+
+	// AGENTS.md's requirement, and the one this autopilot failed twice on the
+	// way to getting right: high Skill has to survive substantially longer. It
+	// did not while the pogo was in -- the player spent 87% of the run in the
+	// air and died faster than the random walker.
+	auto survived = []( float skill ) {
+		int total = 0;
+		for( uint64_t seed = 1; seed <= 6; ++seed )
+		{
+			GameConfig c = BaseConfig();
+			c.skill      = skill;
+			c.seed       = seed;
+
+			Rng r( seed );
+			Input i2;
+			Rafters g;
+			g.Reset( c, r );
+
+			int t = 0;
+			for( ; t < 40000 && !g.Finished(); ++t )
+				g.Step( c, i2, r );
+
+			total += t;
+		}
+		return total;
+	};
+
+	const int clumsy = survived( 0.1f );
+	const int adept  = survived( 1.0f );
+	Check( adept > clumsy, "a skilled player lasts longer than a clumsy one (" +
+	                           std::to_string( adept ) + " > " + std::to_string( clumsy ) + ")" );
+}
+
+//---------------------------------------------------------------------------
+// Duel. Two autopilots at the same skill can stand off forever, so the round
+// timer is the assertion.
+//---------------------------------------------------------------------------
+void TestDuel()
+{
+	Section( "Duel" );
+
+	GameConfig cfg = BaseConfig();
+	Rng rng( cfg.seed );
+	Input in;
+	Duel game;
+	game.Reset( cfg, rng );
+
+	Check( game.Health( 0 ) == Duel::kMaxHealth && game.Health( 1 ) == Duel::kMaxHealth,
+	       "both fighters start on full health" );
+
+	bool gapOk    = true;
+	bool healthOk = true;
+	bool bothHurt = false;
+	int seenHit0  = 0;
+	int seenHit1  = 0;
+
+	for( int i = 0; i < 60000 && !game.Finished(); ++i )
+	{
+		game.Step( cfg, in, rng );
+
+		// Fighters are one cell wide and must never occupy the same cell, or a
+		// strike has nowhere to land and they pass through each other.
+		gapOk = gapOk && game.Separation() >= 1.0f;
+
+		healthOk = healthOk && game.Health( 0 ) <= Duel::kMaxHealth &&
+		           game.Health( 1 ) <= Duel::kMaxHealth;
+
+		if( game.Health( 0 ) < Duel::kMaxHealth )
+			++seenHit0;
+		if( game.Health( 1 ) < Duel::kMaxHealth )
+			++seenHit1;
+	}
+
+	bothHurt = seenHit0 > 0 && seenHit1 > 0;
+
+	Check( gapOk, "the fighters never share a cell" );
+	Check( healthOk, "health never rises above the maximum" );
+	Check( bothHurt, "both fighters land hits over a match" );
+	Check( game.Finished(), "a match of Duel eventually ends" );
+	Check( game.Wins( 0 ) >= Duel::kRoundsToWin || game.Wins( 1 ) >= Duel::kRoundsToWin ||
+	           game.Round() >= Duel::kRoundsToWin * 3,
+	       "the match ended on rounds won or on the round limit" );
+
+	// Two evenly matched autopilots that both decide to keep their distance are
+	// the case with no natural end. Without the round timer `Finished` never
+	// returns true and the layer shows one match for the rest of the show.
+	{
+		GameConfig even = BaseConfig();
+		even.skill      = 1.0f;
+		even.difficulty = 0.0f;// slowest approach, longest stand-off
+
+		Rng r2( 77 );
+		Input in2;
+		Duel g2;
+		g2.Reset( even, r2 );
+
+		int ticks = 0;
+		for( ; ticks < 200000 && !g2.Finished(); ++ticks )
+			g2.Step( even, in2, r2 );
+
+		Check( g2.Finished(), "a stand-off between two perfect fighters still ends" );
+		if( gVerbose )
+			std::printf( "       (stand-off resolved after %d ticks, %d rounds)\n",
+			             ticks, g2.Round() );
+	}
+}
+
+//---------------------------------------------------------------------------
 // Things every game has to be true of, whatever it is.
 //---------------------------------------------------------------------------
 void TestAllGames()
@@ -921,6 +1602,14 @@ int main( int argc, char** argv )
 	TestRally();
 	TestMarchers();
 	TestDrift();
+	TestStacker();
+	TestChase();
+	TestGirders();
+	TestSwarm();
+	TestTrails();
+	TestReflex();
+	TestRafters();
+	TestDuel();
 	TestAllGames();
 
 	std::printf( "\n%s%d checks, %d failed\033[0m\n",

@@ -11,11 +11,18 @@
 
 	## One plugin, a Game dropdown
 
-	Five games could have been ten bundles -- a source and an effect each. They
-	are not, for the reason `idler` next door keeps eleven screensavers in one
-	plugin: a Resolume user does not want ten entries in the effect list that
-	differ only in which sprite moves, and a sixth game should not cost a sixth
-	bundle, a sixth plugin ID, a sixth entry in every release note.
+	Thirteen games could have been twenty-six bundles -- a source and an effect
+	each. They are not, for the reason `idler` next door keeps eleven
+	screensavers in one plugin: a Resolume user does not want twenty-six entries
+	in the effect list that differ only in which sprite moves, and a fourteenth
+	game should not cost a fourteenth bundle, a fourteenth plugin ID, a
+	fourteenth entry in every release note.
+
+	It has since been paid for once. Eight games were added at once and the
+	whole cost was eight entries in `GameId`, eight files in the CMake list, and
+	one new cell type between all of them. Nothing about the plugin, the
+	parameter list or the shader had to change per game, which is the thing this
+	arrangement was betting on.
 
 	The cost is that the parameter list is the union of what the games need, so
 	it is kept deliberately generic -- Speed, Skill, Seed, and a handful of
@@ -42,6 +49,9 @@
 namespace coinop
 {
 
+/// The dropdown, in the order the host shows it. **Appending is safe and
+/// reordering is not** -- the value is a saved parameter, so moving an entry
+/// changes which game an existing composition loads.
 enum class GameId : unsigned int
 {
 	Snake = 0,
@@ -49,6 +59,14 @@ enum class GameId : unsigned int
 	Marchers, ///< A formation that steps down the screen and shoots back.
 	Rally,    ///< Two paddles, one ball.
 	Drift,    ///< Rotating ship, drifting rocks. Vector shapes, rasterised.
+	Stacker,  ///< Falling polyominoes; runs of contiguous cells clear.
+	Chase,    ///< Generated maze, pellets, four pursuers with four behaviours.
+	Girders,  ///< Climb the platforms while the hazards cascade down them.
+	Swarm,    ///< A formation that individual attackers dive out of and rejoin.
+	Trails,   ///< Riders that never stop, leaving walls. Last one alive.
+	Reflex,   ///< A prompt, a closing window, and the right button or nothing.
+	Rafters,  ///< Bump the floor from below to flip what is standing on it.
+	Duel,     ///< Two fighters, wind-up and recovery, best of three.
 	Count
 };
 

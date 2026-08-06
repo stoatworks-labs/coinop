@@ -105,8 +105,13 @@ python3 demo/tools/check_shaders.py
 # level bright on two cells, because the C++ casts to uint8_t (truncating) and
 # the port used Math.round — invisible on screen, and exactly the kind of drift
 # that makes a demo stop being evidence about the plugin.
+#
+# COINOP_HARNESS points it at the binary this script just built. Without it the
+# checker falls back to build/coinoptest, which is whatever was left there last
+# — and a stale harness compares the port against an older plugin and calls the
+# difference a port bug.
 if command -v node > /dev/null 2>&1; then
-	node demo/tools/check_sim.mjs
+	COINOP_HARNESS="$BUILD/coinoptest" node demo/tools/check_sim.mjs
 else
 	printf '   --    node not installed, skipping the ported-simulation check\n'
 fi

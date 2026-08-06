@@ -4,8 +4,14 @@ Live at **https://coinop-demo.stoatworks-labs.com**, linked from the
 [project page](https://stoatworks-labs.com/software/coinop/) and from the
 [video plugins page](https://stoatworks-labs.com/video-plugins/).
 
-All five games are ported — Snake, Bricks, Marchers, Rally and Drift — and every
-one of them agrees with the C++ byte for byte under `check_sim.mjs`.
+**All thirteen games are ported** — Snake, Bricks, Marchers, Rally, Drift,
+Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters and Duel — and every one
+of them agrees with the C++ byte for byte under `check_sim.mjs`.
+
+The dropdown is built from whichever keys `GAMES` carries, and the page prints
+an `INCOMPLETE` notice naming the gap if that list ever falls behind
+`GAME_NAMES` again. A demo that offers a game it has not ported is worse than
+one that admits it has not.
 
 **This is not the plugin.** The two shaders are the text from
 [`source/Shaders.cpp`](../source/Shaders.cpp), copied across unedited —
@@ -61,17 +67,32 @@ advances the game by one frame's worth of time and cannot go back; Restart begin
 a new game rather than rewinding this one. That is the plugin's own behaviour,
 and the reason `Sim.h` opens by admitting it breaks the fleet's rule knowingly.
 
-## Adding a sixth game
+## Porting another game
 
 One class implementing `reset / step / draw / tickHz / score / finished /
-intensity`, ported from `source/games/`, then one line in the `GAMES` map. The
-dropdown is built from whichever keys `GAMES` has and the `differences` entry
-counts them itself, so nothing else needs touching.
+intensity`, ported from `source/games/`, then one line in the `GAMES` map.
+`GAME_NAMES` already lists all thirteen in `GameId` order; the dropdown is built
+from whichever keys `GAMES` has and the notice counts the difference itself, so
+nothing else needs touching.
 
 Port it against `check_sim.mjs` rather than against the screen: add the game to
 `GAMES`, run the checker, and fix until the digest matches. Marchers and Drift
 were both done that way and both matched on the first run, which is the point —
 a game that *looks* right is not evidence.
+
+What the second batch of eight turned out to show: **every one of them matched
+on its first honest run**, including Swarm, which carries a sine wobble per
+diver, and Rafters and Duel, which carry float physics with sub-cell collision
+thresholds. Stacker is entirely integer by design, so it had nothing to disagree
+about.
+
+That is a weaker result than it sounds and the reason is worth keeping. The
+check is one configuration at one instant: 400 frames from seed 7. The C++
+computes in 32-bit float where JavaScript has only 64-bit doubles, so a
+threshold like `abs(f.x - shipX) < 0.9` can in principle fall on opposite sides
+in the two implementations, and everything after that point is a different game.
+Nothing here proves it does not happen at tick 4000 — only that it does not
+happen by tick 400.
 
 ## Editing it
 

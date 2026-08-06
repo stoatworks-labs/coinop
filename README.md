@@ -9,7 +9,7 @@
 > they draw (see [Status](#status)). It has **never been loaded into Resolume**.
 > Check it in your own rig before trusting it in a show.
 
-Five playable arcade games for [Resolume](https://resolume.com) Arena and
+Thirteen playable arcade games for [Resolume](https://resolume.com) Arena and
 Avenue, as a pair of FFGL plugins. Driven by MIDI or OSC, or left to play
 themselves.
 
@@ -17,7 +17,7 @@ themselves.
 
 ![Snake, Bricks, Marchers and Drift, on four of the six palettes](docs/hero.png)
 
-<sub>Four of the five games, on four of the six palettes. Rendered by
+<sub>Four of the games, on four of the six palettes. Rendered by
 `coinopgl`, the offline harness — the real autopilot playing through the real
 cell shader, not a Resolume screen capture.</sub>
 
@@ -28,6 +28,21 @@ cell shader, not a Resolume screen capture.</sub>
 | **Marchers** | A formation that steps down the screen and shoots back. |
 | **Rally** | Two paddles, one ball. Two players, one plugin instance. |
 | **Drift** | Rotating ship, splitting rocks, wrapping playfield. |
+| **Stacker** | Falling polyominoes. Contiguous runs clear, not full rows. |
+| **Chase** | A maze carved fresh each level, pellets, four pursuers. |
+| **Girders** | Climb the floors while the hazards cascade back down them. |
+| **Swarm** | A formation attackers peel out of, dive from, and rejoin. |
+| **Trails** | Riders that never stop, leaving walls. Last one alive. |
+| **Reflex** | A prompt, a closing window, and the right button or nothing. |
+| **Rafters** | Hit the floor from below to flip what is standing on it. |
+| **Duel** | Two fighters. Wind-up, active, recovery. Best of three. |
+
+The mechanics are the public domain part; the names are not. None of these is
+named after what it descends from, and none of them copies the parts a court
+has held to be protected expression — see
+[AGENTS.md](AGENTS.md#naming-and-the-line-the-games-are-written-to) for the rule
+and [`source/games/Stacker.h`](source/games/Stacker.h) for it applied in
+detail.
 
 `Coinop` is a source. `Coinop Over` is an effect — and in the effect, the brick
 field can be built out of the incoming clip, so breaking a brick punches a hole
@@ -60,8 +75,8 @@ or OSC-map any of them. So every control is a parameter:
 | Parameter | Good for |
 | --- | --- |
 | **Paddle** | A fader or an OSC float. The nicest way to play Bricks and Rally. |
-| **Left / Right / Up / Down** | Four pads. Steering, and Rally's second player. |
-| **Fire** | One pad. Shoot, launch, thrust — and in Snake, "turn right". |
+| **Left / Right / Up / Down** | Four pads. Steering, Rally's second player, Stacker's rotate, Duel's block. |
+| **Fire** | One pad. Shoot, launch, thrust, hard-drop, strike — and in Snake, "turn right". |
 | **Autoplay** | On by default. The autopilot plays, and loses on purpose. |
 | **Skill** | How competent the autopilot is. At 1.0 it plays a long game. |
 | **Seed** | Same seed, same game. |
@@ -119,13 +134,20 @@ See [CLAUDE.md](CLAUDE.md) for the full command reference and
 
 Verified offline on macOS, in two harnesses:
 
-- **`coinoptest`** — 101 checks, no GL context. Per-game determinism, the three
+- **`coinoptest`** — 243 checks, no GL context. Per-game determinism, the three
   host-timing defences, and the invariants that matter per game: Snake's turn
   queue, Bricks' tunnelling and its two degenerate-angle locks, Rally's
-  termination, Marchers' bounds, Drift's wrapping.
-- **`coinopgl`** — 15 checks, headless CGL. Both shader variants compile and
-  link, every game renders lit cells, the letterbox lands exactly where it
-  should, no GL error.
+  termination, Marchers' bounds, Drift's wrapping, Stacker's clear rule,
+  Chase's maze loops and its reversal ban, Girders' floor ordering, Swarm's
+  divers rejoining, Trails' head-on symmetry, Reflex's closing window,
+  Rafters' one-cell collision, Duel's round limit.
+- **`coinopgl`** — 31 checks, headless CGL. Both shader variants compile and
+  link, all thirteen games render lit cells, the letterbox lands exactly where
+  it should, no GL error.
+
+- **`demo/tools/check_sim.mjs`** — the browser demo re-implements all thirteen
+  games in JavaScript, and `coinoptest --grid` reduces each one to a digest of
+  its playfield after a fixed run. All thirteen agree byte for byte.
 
 Not verified: the plugin has never been loaded into Resolume, the FFGL parameter
 and clock plumbing is the part no harness here reaches, and the Windows build
@@ -139,5 +161,8 @@ This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTI
 
 MIT. See [LICENSE](LICENSE).
 
-The mechanics here are generic; the names are deliberately not the famous ones.
-See the naming note in [AGENTS.md](AGENTS.md).
+The mechanics here are generic; the names are deliberately not the famous ones,
+and neither is the expression — the playfield is whatever the Grid parameter
+says, colour comes from the palette by role, and the features a court has
+specifically named as protected are left out. See the naming note in
+[AGENTS.md](AGENTS.md).

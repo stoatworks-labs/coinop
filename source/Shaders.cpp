@@ -73,17 +73,25 @@ const uint CELL_FOOD   = 4u;
 const uint CELL_BRICK  = 5u;
 const uint CELL_PADDLE = 6u;
 const uint CELL_BALL   = 7u;
+const uint CELL_ENEMY  = 8u;
 
 //---------------------------------------------------------------------------
-// Palettes. Six sets of five, indexed by role rather than by cell type, so a
+// Palettes. Six sets of six, indexed by role rather than by cell type, so a
 // palette does not have to know what a Marcher is.
 //
 // Roles: 0 structure (walls), 1 primary (snake, paddle), 2 accent (head, ball),
-// 3 target (food, bricks), 4 secondary (brick rows).
+// 3 target (food, bricks), 4 secondary (brick rows), 5 hazard (anything
+// hunting the player).
+//
+// Hazard is its own role rather than a reuse of target because the two mean
+// opposite things to the player -- one is what you are trying to reach and the
+// other is what you are trying to avoid -- and a maze in which the pursuers and
+// the pellets are the same colour is not a maze anybody can read. It sits
+// opposite `primary` in every palette for that reason.
 //---------------------------------------------------------------------------
 vec3 paletteColor( int mode, int role, float tint )
 {
-	vec3 structure, primary, accent, target, secondary;
+	vec3 structure, primary, accent, target, secondary, hazard;
 
 	if( mode == 0 )       //Phosphor
 	{
@@ -92,6 +100,7 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 0.75, 1.00, 0.80 );
 		target    = vec3( 0.95, 0.85, 0.25 );
 		secondary = vec3( 0.10, 0.65, 0.30 );
+		hazard    = vec3( 1.00, 0.25, 0.30 );
 	}
 	else if( mode == 1 )  //Amber
 	{
@@ -100,6 +109,7 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 1.00, 0.92, 0.70 );
 		target    = vec3( 1.00, 0.35, 0.10 );
 		secondary = vec3( 0.72, 0.40, 0.06 );
+		hazard    = vec3( 0.95, 0.98, 1.00 );
 	}
 	else if( mode == 2 )  //Ice
 	{
@@ -108,6 +118,7 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 0.90, 0.98, 1.00 );
 		target    = vec3( 0.60, 0.40, 1.00 );
 		secondary = vec3( 0.20, 0.50, 0.85 );
+		hazard    = vec3( 1.00, 0.30, 0.55 );
 	}
 	else if( mode == 3 )  //Candy
 	{
@@ -116,6 +127,7 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 1.00, 0.90, 0.45 );
 		target    = vec3( 0.45, 1.00, 0.80 );
 		secondary = vec3( 0.70, 0.35, 1.00 );
+		hazard    = vec3( 1.00, 0.30, 0.15 );
 	}
 	else if( mode == 4 )  //Mono
 	{
@@ -124,6 +136,10 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 1.00 );
 		target    = vec3( 0.62 );
 		secondary = vec3( 0.45 );
+		//Mono has no hue to spend, so the hazard is the one thing here that is
+		//allowed to be brighter than the player. On a single-colour wall that is
+		//the only channel left to say "this one kills you".
+		hazard    = vec3( 0.78 );
 	}
 	else                  //Fire
 	{
@@ -132,6 +148,9 @@ vec3 paletteColor( int mode, int role, float tint )
 		accent    = vec3( 1.00, 0.90, 0.55 );
 		target    = vec3( 1.00, 0.72, 0.15 );
 		secondary = vec3( 0.75, 0.12, 0.05 );
+		//Fire is red all the way through, so a red hazard would vanish into it.
+		//Violet is the only thing on that wheel far enough from the rest.
+		hazard    = vec3( 0.85, 0.45, 1.00 );
 	}
 
 	vec3 c = primary;
@@ -139,9 +158,12 @@ vec3 paletteColor( int mode, int role, float tint )
 	else if( role == 2 ) c = accent;
 	else if( role == 3 ) c = target;
 	else if( role == 4 ) c = secondary;
+	else if( role == 5 ) c = hazard;
 
-	//Tint rotates between the primary and secondary ends of the palette, which
-	//is how one brick field gets per-row colour without six more uniforms.
+	//Tint rotates between the role's colour and the secondary end of the
+	//palette, which is how one brick field gets per-row colour without six more
+	//uniforms -- and how four pursuers, or four light-cycle riders, are told
+	//apart without four more cell types.
 	if( tint > 0.0 )
 		c = mix( c, secondary, clamp( tint, 0.0, 1.0 ) * 0.75 );
 
@@ -157,6 +179,7 @@ int roleFor( uint type )
 	if( type == CELL_BALL )   return 2;
 	if( type == CELL_FOOD )   return 3;
 	if( type == CELL_BRICK )  return 4;
+	if( type == CELL_ENEMY )  return 5;
 	return 1;
 }
 

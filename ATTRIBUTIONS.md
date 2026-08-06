@@ -46,7 +46,7 @@ What this set out to be. No code, assets or binaries from any of these were used
 
 ### The arcade cabinet
 
-Five games in the spirit of the early-eighties arcade floor. None is a clone of a specific title and no original code, ROM or artwork was used — the games are written from scratch and the names are our own. What is borrowed is the form: one screen, one rule, no explanation.
+Thirteen games in the spirit of the early-eighties arcade floor. None is a clone of a specific title and no original code, ROM or artwork was used — the games are written from scratch and the names are our own. What is borrowed is the form: one screen, one rule, no explanation.
 
 ## Getting this wrong
 

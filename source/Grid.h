@@ -56,6 +56,9 @@ enum class Cell : uint8_t
 	Brick,    ///< `shade` carries remaining hit points, `tint` the row colour.
 	Paddle,
 	Ball,
+	Enemy,    ///< Anything that is trying to end the run: a pursuer, a barrel,
+	          ///< a diving attacker, the other fighter. `shade` drops when it is
+	          ///< temporarily harmless -- fleeing, stunned, flipped on its back.
 	Count
 };
 

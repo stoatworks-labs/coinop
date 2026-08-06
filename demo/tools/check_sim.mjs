@@ -162,9 +162,16 @@ if (printOnly) {
   process.exit(0);
 }
 
-const harness = resolve(repoRoot, 'build', 'coinoptest');
+// `tools/verify.sh` builds into its own directory, not `build/`, so it passes
+// the harness it actually just built. Defaulting to `build/` and letting verify
+// use whatever was lying there meant a stale binary silently compared the port
+// against an older version of the plugin — which is the one failure this file
+// exists to prevent.
+const harness = process.env.COINOP_HARNESS
+  ? resolve(process.env.COINOP_HARNESS)
+  : resolve(repoRoot, 'build', 'coinoptest');
 if (!existsSync(harness)) {
-  console.log('check_sim: build/coinoptest is not built — skipping.');
+  console.log(`check_sim: ${harness} is not built — skipping.`);
   console.log('  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build');
   process.exit(0);
 }

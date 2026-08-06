@@ -75,6 +75,22 @@ add_library(coinop_sim STATIC
     source/games/Rally.cpp
     source/games/Drift.h
     source/games/Drift.cpp
+    source/games/Stacker.h
+    source/games/Stacker.cpp
+    source/games/Chase.h
+    source/games/Chase.cpp
+    source/games/Girders.h
+    source/games/Girders.cpp
+    source/games/Swarm.h
+    source/games/Swarm.cpp
+    source/games/Trails.h
+    source/games/Trails.cpp
+    source/games/Reflex.h
+    source/games/Reflex.cpp
+    source/games/Rafters.h
+    source/games/Rafters.cpp
+    source/games/Duel.h
+    source/games/Duel.cpp
 )
 
 target_include_directories(coinop_sim PUBLIC source)

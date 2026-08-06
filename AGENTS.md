@@ -1,10 +1,15 @@
 # coinop — orientation for another LLM (or a newcomer)
 
-**What it is:** five playable arcade games as **two** FFGL 2.1 plugins for
+**What it is:** thirteen playable arcade games as **two** FFGL 2.1 plugins for
 Resolume Arena/Avenue. `Coinop` is a source that draws a playfield over its own
 background; `Coinop Over` is an effect that draws it over the incoming clip —
 and can build the brick field *out of* the clip. C++17 + GLSL 4.10, CMake,
 universal macOS `.bundle` and a Windows `.dll`.
+
+Snake, Bricks, Marchers, Rally and Drift shipped in v0.1.0. Stacker, Chase,
+Girders, Swarm, Trails, Reflex, Rafters and Duel came after, and cost one new
+cell type between the eight of them — see the cell encoding below, and see
+**Naming** for the rule every one of them was written to.
 
 `CLAUDE.md` is the command reference — build, verify, install. This file is the
 *why*: read it before touching the timestep, the input path, or the cell
@@ -101,7 +106,21 @@ This is a render thread with a 20 ms budget, not an audio callback.
 The sim writes a grid of four-byte cells; the plugin uploads them verbatim as
 `GL_RGBA8UI`; the fragment shader reads them with `texelFetch` and decides what
 a cell *looks* like. Nothing in the shader knows which game is running, which is
-why a sixth game needs no shader change.
+why a new game usually needs no shader change at all.
+
+That claim was tested by adding eight games at once. Seven of them needed
+nothing: a maze wall is a `Wall`, a pellet is `Food`, a stacker's settled block
+is a `Brick`, a fighter's health bar is a `Paddle`. **One new type was added —
+`Enemy`, with its own `hazard` role in every palette.** It is worth knowing why
+that one could not be borrowed. `Food` is the palette's *target* role, the thing
+the player is trying to reach; a pursuer is the thing they are trying to avoid.
+A maze in which the pellets and the ghosts are the same colour is not a maze
+anybody can read, and no amount of `shade` fixes a role that means the opposite
+of what is happening.
+
+Adding a role means adding a colour to all six palettes, which is the real cost
+and the reason to do it once rather than per game. Eight games share `Enemy`
+between them.
 
 **Integer texture, not `GL_RGBA8`.** A normalised byte texture hands the shader
 0..1 floats, so recovering the cell type means `int( t.r * 255.0 + 0.5 )` and
@@ -157,6 +176,34 @@ terminates at all.
 Rally has no natural failure state at all, so it has a target score. Reaching it
 finishes the match and triggers the respawn.
 
+### Skill is not enough on its own, and four games prove it
+
+Skill works when the game can be *played badly*. Three of the later games have
+no such thing — there is a correct move and the machine can find it — and for
+those, termination has to be structural or the layer freezes on an immortal run.
+Every one of these was found by measuring, not by reasoning:
+
+- **Stacker.** At Skill 1.0 the evaluator reached one tick per row and cleared
+  runs indefinitely: six thousand ticks with the game never once ending. So past
+  that point the piece starts falling *more than a row at a time*. An autopilot
+  that moves one column a tick cannot steer a piece falling four, however well
+  it reads the board.
+- **Reflex.** A reaction test with a fixed window is a game the machine simply
+  wins. So the window closes as the run gets longer, until it is open for a
+  single tick and the two-tick floor on the autopilot's reaction cannot beat it.
+- **Duel.** Two fighters at the same Skill both decide to keep their distance
+  and circle forever. A round that runs past its tick limit is awarded on
+  health.
+- **Trails.** Somebody always survives a light-cycle round, so, like Rally, the
+  match runs to a target number of round wins.
+
+**Girders had the mirror of this bug** and it is the one to watch for: the hop
+made the climber immune to anything on its floor, there was no cooldown, and the
+autopilot could re-hop the tick it landed. On a small grid that produced a level
+it won forever. The fix was a cooldown, not a Skill tweak — a mechanic that
+grants invulnerability needs a gap in it, or the Skill lever has nothing to act
+on.
+
 ### The vertical lock
 
 Worth reading `Bricks::ReflectOffPaddle` before touching it. A ball returned
@@ -195,18 +242,41 @@ which then misses, and target selection, which then turns the long way round.
 
 ---
 
-## Naming
+## Naming, and the line the games are written to
 
 The mechanics are the public domain part; the names are not. *Breakout* and
-*Asteroids* are Atari marks, *Space Invaders* is Taito's. The games here are
-called Bricks, Drift, Marchers, Rally and Snake for that reason, the same
+*Asteroids* are Atari marks, *Space Invaders* is Taito's, and every one of the
+eight games added after v0.1.0 descends from something with a live rightsholder
+and a lawyer. So none of them is named after what it descends from, the same
 instinct that has `nesolume` describing "retro console hardware" rather than
 naming a console.
 
-**Tetris is deliberately absent.** It is the best grid fit of any of them and it
-is the one to leave alone: Tetris Holding actively litigates look-alikes and won
-on non-literal copying in *Tetris Holding v. Xio Interactive* (2012). A stacker
-in this plugin would be the single most legally exposed thing in the fleet.
+That is necessary and it is not sufficient. The case that says so is *Tetris
+Holding v. Xio Interactive* (2012), and it is worth knowing what it actually
+held: the **rules** of a falling-block puzzle are an unprotectable idea and
+copying them is fine, and Xio lost anyway, on **expression** — the playfield's
+dimensions, the seven specific pieces, their colours, the ghost piece, the
+next-piece preview, garbage lines, the board filling up at the end. Renaming it
+would not have helped.
+
+So the rule this repo works to is: **take the mechanic, and build the
+expression from this plugin's own parts.** In practice that means the playfield
+is whatever the Grid parameter says rather than a copied layout, colour comes
+from the palette by role and never from a per-object colour scheme, and any
+feature that was specifically named in a judgment is left out. `Stacker.h`
+works through that list item by item for the one game where the exposure is
+real; the same reasoning applies more loosely to the rest.
+
+The two places worth reading for how far the differences go beyond naming:
+
+- **Stacker** does not use the seven tetrominoes, and its clear rule is a
+  contiguous *run* rather than a full row — which is also the only version
+  that works on a 32-wide playfield at all.
+- **Reflex** takes the timed-prompt mechanic of a laserdisc game and nothing
+  else, because everything else that game was is hand-drawn animation, and
+  none of that is portable to a cell grid whether or not it were free.
+
+The eight are Stacker, Chase, Girders, Swarm, Trails, Reflex, Rafters and Duel.
 
 ---
 
@@ -214,15 +284,23 @@ in this plugin would be the single most legally exposed thing in the fleet.
 
 Verified offline, in two harnesses, on macOS:
 
-- `coinoptest` — 101 checks. Determinism per game, the three timing defences,
+- `coinoptest` — 243 checks. Determinism per game, the three timing defences,
   and per-game invariants: Snake's turn queue and reversal guard, Bricks'
   tunnelling and both locks, Rally's termination, Marchers' formation bounds,
-  Drift's wrapping. Plus, for every game: only known cell types are ever
-  written, `Draw` is pure, extreme grid sizes still draw, and the whole thing
-  survives a jittery frame clock.
-- `coinopgl` — 15 checks. Both shader variants compile and link, every game
-  renders lit cells rather than a flat background, the letterbox lands exactly
-  where it should, and no GL error is raised.
+  Drift's wrapping, Stacker's clear rule and fall ramp, Chase's maze loops and
+  the reversal ban, Girders' floor ordering, Swarm's divers leaving and
+  rejoining, Trails' head-on symmetry, Reflex's closing window, Rafters' bump
+  and its one-cell collision, Duel's round limit. Plus, for every game: only
+  known cell types are ever written, `Draw` is pure, extreme grid sizes still
+  draw, and the whole thing survives a jittery frame clock.
+- `coinopgl` — 31 checks. Both shader variants compile and link, all thirteen
+  games render lit cells rather than a flat background, the letterbox lands
+  exactly where it should, and no GL error is raised.
+
+The four assertions worth knowing are the ones that failed first and were the
+point of writing the test: Stacker and Reflex both terminating at Skill 1.0,
+Trails giving neither rider a structural advantage in a head-on, and Rafters
+surviving longer at high Skill than at low. The last one failed twice.
 
 **It has never been loaded into Resolume.** Only compiled, simulated, rendered
 and measured offline. The FFGL parameter and clock plumbing in `Coinop.cpp` is
