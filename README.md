@@ -88,14 +88,14 @@ or OSC-map any of them. So every control is a parameter:
 
 ## Download
 
-**[v1.0.0](https://github.com/stoatworks-labs/coinop/releases/tag/v1.0.0)** — prebuilt for macOS and Windows. Pick your platform:
+**[v1.0.1](https://github.com/stoatworks-labs/coinop/releases/tag/v1.0.1)** — prebuilt for macOS and Windows. Pick your platform:
 
 <details>
 <summary><b>macOS</b> — Universal (Apple Silicon + Intel)</summary>
 
 | Build | Download | Size |
 | --- | --- | --- |
-| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-1.0.0-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v1.0.0/coinop-1.0.0-macos-universal.dmg) | 1.0 MB |
+| Universal (Apple Silicon + Intel) · .dmg disk image | [`coinop-1.0.1-macos-universal.dmg`](https://github.com/stoatworks-labs/coinop/releases/download/v1.0.1/coinop-1.0.1-macos-universal.dmg) | 1.0 MB |
 | Universal (Apple Silicon + Intel) · .zip archive | [`coinop-macos-universal.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-macos-universal.zip) | 639 KB |
 
 </details>
@@ -105,7 +105,7 @@ or OSC-map any of them. So every control is a parameter:
 
 | Build | Download | Size |
 | --- | --- | --- |
-| x64 · .exe installer | [`coinop-1.0.0-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/coinop/releases/download/v1.0.0/coinop-1.0.0-windows-x86_64-setup.exe) | 264 KB |
+| x64 · .exe installer | [`coinop-1.0.1-windows-x86_64-setup.exe`](https://github.com/stoatworks-labs/coinop/releases/download/v1.0.1/coinop-1.0.1-windows-x86_64-setup.exe) | 264 KB |
 | x64 · .zip archive | [`coinop-windows-x86_64.zip`](https://github.com/stoatworks-labs/coinop/releases/latest/download/coinop-windows-x86_64.zip) | 329 KB |
 
 </details>
