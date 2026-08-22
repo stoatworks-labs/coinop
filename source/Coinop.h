@@ -5,6 +5,9 @@
 
 #include <FFGLSDK.h>
 
+// After FFGLSDK.h, which is where FFUInt32 comes from.
+#include "StoatworksAboutParams.h"
+
 /**
 	The FFGL side: parameters in, cells out.
 
@@ -41,10 +44,36 @@ public:
 	FFResult DeInitGL() override;
 
 	FFResult SetFloatParameter( unsigned int index, float value ) override;
+
+	char* GetTextParameter( unsigned int index ) override;
+
+	/// Declared only so the About line can accept its own default.
+	/// instantiateGL pushes every declared default back through the setters on
+	/// a fresh instance and deletes the instance if one fails, and
+	/// CFFGLPlugin's SetTextParameter is a stub that returns exactly that
+	/// failure -- so without this override no real host can load the plugin,
+	/// while every offline harness here carries on passing.
+	FFResult SetTextParameter( unsigned int index, const char* value ) override;
 	float GetFloatParameter( unsigned int index ) override;
 
 private:
 	void UpdateClock();
+
+public:
+	FFResult SetTime( double time ) override;
+
+	//---------------------------------------------------------------------
+	// Clock test hooks. The offline harness DECLARES its unit rather than
+	// leaving UpdateClock to infer one -- a single absolute time handed over
+	// in one frame is genuinely ambiguous, and an implicit unit is what let
+	// the millisecond bug through in the first place.
+	//---------------------------------------------------------------------
+	void SetClockScaleForTest( double scale );
+	void TickClockForTest();
+	double ClockScaleForTest() const;
+	double HostSecondsForTest() const;
+
+private:
 	void UploadCells();
 	void Render( int width, int height, GLuint inputTexture, float maxU, float maxV );
 
@@ -77,6 +106,11 @@ private:
 	// 2..500 is a milliseconds-host frame, anything else keeps waiting.
 	//-----------------------------------------------------------------------
 	double clockScale  = 0.0;///< 0 until decided; then 1.0 or 0.001.
+	double lastWallTime = -1.0;
+	double wallStart    = -1.0;
+	int secondsVotes    = 0;
+	int millisVotes     = 0;
+	bool hostTimeSeen   = false;
 	double lastRawTime = -1.0;
 	double hostSeconds = 0.0;
 
