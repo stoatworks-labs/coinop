@@ -361,3 +361,10 @@ anything on screen.
 and measured offline. The FFGL parameter and clock plumbing in `Coinop.cpp` is
 the part no harness here can exercise — check it in your own rig before trusting
 it in a show. The Windows build has never been compiled at all.
+
+## Notes
+
+`docs/NOTES.md` carries this repo's working notes — current status, decisions
+already made, and the traps that have actually bitten. Read it before changing
+anything non-obvious. Cross-cutting fleet knowledge lives in
+[fleet-notes](https://github.com/stoatworks-labs/fleet-notes).
