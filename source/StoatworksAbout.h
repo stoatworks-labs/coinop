@@ -20,7 +20,7 @@ namespace stoatworks::about
     inline constexpr auto guide = "https://stoatworks-labs.com/software/coinop/guide/";
     inline constexpr auto page = "https://stoatworks-labs.com/software/coinop/";
     inline constexpr auto repo = "https://github.com/stoatworks-labs/coinop";
-    inline constexpr auto versionFallback = "v1.0.3";
+    inline constexpr auto versionFallback = "v1.0.4";
 
     inline constexpr auto org = "Stoatworks Labs";
     inline constexpr auto home = "https://stoatworks-labs.com";
