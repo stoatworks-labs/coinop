@@ -250,7 +250,7 @@ void main()
 	vec4 clip   = texture( InputTexture, clipUV );
 
 	//The clip is underneath, the plugin's own background veils it, and the
-	//playfield draws on top. Background Opacity therefore keeps exactly the
+	//playfield draws on top. Background Alpha therefore keeps exactly the
 	//meaning it has in the source plugin.
 	col   = mix( clip.rgb, BackColor.rgb, BackColor.a );
 	alpha = max( clip.a, BackColor.a );

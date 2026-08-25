@@ -154,7 +154,7 @@ CoinopPlugin::CoinopPlugin( bool over ) :
 	SetParamInfof( PT_BACK_R, "Background Red", FF_TYPE_RED );
 	SetParamInfof( PT_BACK_G, "Background Green", FF_TYPE_GREEN );
 	SetParamInfof( PT_BACK_B, "Background Blue", FF_TYPE_BLUE );
-	SetParamInfof( PT_BACK_OPACITY, "Background Opacity", FF_TYPE_STANDARD );
+	SetParamInfof( PT_BACK_OPACITY, "Background Alpha", FF_TYPE_STANDARD );
 	SetParamGroup( PT_BACK_R, "Background" );
 	SetParamGroup( PT_BACK_G, "Background" );
 	SetParamGroup( PT_BACK_B, "Background" );

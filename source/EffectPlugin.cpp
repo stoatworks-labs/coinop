@@ -18,7 +18,7 @@
 
 	The compositing order is shared with the source: the clip is at the bottom,
 	the plugin's own background veils it, and the playfield draws on top. So
-	Background Opacity keeps exactly the meaning it has in the source plugin
+	Background Alpha keeps exactly the meaning it has in the source plugin
 	rather than becoming a second, differently-behaved control on this side.
 
 	See SourcePlugin.cpp for why this file is listed in its own target rather
