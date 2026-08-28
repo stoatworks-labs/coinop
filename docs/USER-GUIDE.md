@@ -17,8 +17,8 @@ Candy, Girders on Fire.*
 > JavaScript and **agrees with the C++ byte for byte** on a playfield digest.
 >
 > **It has never been loaded into Resolume.** The FFGL parameter and clock plumbing is the part no
-> harness here reaches, and the Windows build has never been compiled. Try it on a spare layer
-> first.
+> harness here reaches. The Windows build does compile and ships — it has just never been run in a
+> Windows host either. Try it on a spare layer first.
 >
 > This codebase was created with AI assistance, directed and reviewed by a human author.
 

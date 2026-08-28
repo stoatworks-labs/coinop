@@ -153,9 +153,11 @@ Verified offline on macOS, in two harnesses:
   games in JavaScript, and `coinoptest --grid` reduces each one to a digest of
   its playfield after a fixed run. All fourteen agree byte for byte.
 
-Not verified: the plugin has never been loaded into Resolume, the FFGL parameter
-and clock plumbing is the part no harness here reaches, and the Windows build
-has never been compiled.
+Not verified: the plugin has never been loaded into Resolume, and the FFGL
+parameter and clock plumbing is the part no harness here reaches. The Windows
+build does compile — v1.0.4 ships a Windows x64 installer and zip, and the
+release workflow builds the DLL on `windows-latest` — but nobody has loaded one
+into a Windows host.
 
 <!-- attributions:start -->
 This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTIONS.md).
