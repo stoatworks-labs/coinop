@@ -45,7 +45,7 @@ static CFFGLPluginInfo PluginInfo(
 	0,                                                // Plugin major version number
 	1,                                                // Plugin minor version number
 	FF_EFFECT,                                        // Plugin type
-	"Arcade games over the clip",                     // Plugin description
+	"Fourteen playable arcade games, over the clip.\n\nSnake, Bricks, Marchers, Rally, Drift, Stacker, Chase, Girders, Swarm, Trails and the rest. Driven by MIDI or OSC, or left to play themselves while you do something else.\n\nThese are real simulations rather than animations, so unlike the rest of the range they carry state. The ticks come from the clock rather than from frames: a frame rate drop makes the game render less smoothly and does not make it play slower, so it stays with the music when the show gets heavy.",// Plugin description
 	"Coinop FFGL effect"                              // About
 );
 
