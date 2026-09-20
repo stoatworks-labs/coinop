@@ -39,7 +39,7 @@ public:
 static CFFGLPluginInfo PluginInfo(
 	PluginFactory< CoinopEffect >,                    // Create method
 	"CO02",                                           // Plugin unique ID of maximum length 4
-	"Coinop Over",                                    // Plugin name
+	"SW Coinop Over",                                 // Plugin name
 	2,                                                // API major version number
 	1,                                                // API minor version number
 	0,                                                // Plugin major version number
