@@ -6836,6 +6836,10 @@ const pct = (v) => `${Math.round(v * 100)}%`;
 
 const DEMO = {
   name: 'Coinop',
+  // The FFGL types this repo registers (EffectPlugin.cpp and SourcePlugin.cpp),
+  // for the kit banner's closing sentence, which said "effect" alone until
+  // 2026-09-24.
+  kind: ['effect', 'source'],
   pluginId: 'CO01',
   tagline: 'Arcade games running inside the composition — playable, or left to the autopilot.',
   repo: 'https://github.com/stoatworks-labs/coinop',
