@@ -137,7 +137,7 @@ See [CLAUDE.md](CLAUDE.md) for the full command reference and
 
 Verified offline on macOS, in two harnesses:
 
-- **`coinoptest`** — 243 checks, no GL context. Per-game determinism, the three
+- **`coinoptest`** — 268 checks, no GL context. Per-game determinism, the three
   host-timing defences, and the invariants that matter per game: Snake's turn
   queue, Bricks' tunnelling and its two degenerate-angle locks, Rally's
   termination, Marchers' bounds, Drift's wrapping, Stacker's clear rule,
@@ -145,7 +145,7 @@ Verified offline on macOS, in two harnesses:
   divers rejoining, Trails' head-on symmetry, Reflex's closing window,
   Rafters' one-cell collision, Duel's round limit, Flapper's swept collision
   and its difficulty ramp.
-- **`coinopgl`** — 31 checks, headless CGL. Both shader variants compile and
+- **`coinopgl`** — 33 checks, headless CGL. Both shader variants compile and
   link, all fourteen games render lit cells, the letterbox lands exactly where
   it should, no GL error.
 
