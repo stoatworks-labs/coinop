@@ -277,7 +277,14 @@ float CoinopPlugin::GetFloatParameter( unsigned int index )
 
 FFResult CoinopPlugin::InitGL( const FFGLViewportStruct* vp )
 {
-	(void)vp;
+	// CFFGLPlugin::InitGL is where the SDK stores the viewport, and this
+	// override replaces it -- so it has to be stored here. Without it the
+	// source reads an uninitialised currentViewport in ProcessOpenGL and, in
+	// any host that does not follow up with FF_RESIZE, refuses every frame
+	// with nothing in the log. Found by jackpot's jackpothost harness, which
+	// drives a built plugin through plugMain the way a host does.
+	if( vp )
+		currentViewport = *vp;
 
 	diag::init();
 	const GLubyte* version = glGetString( GL_VERSION );
