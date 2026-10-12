@@ -1,27 +1,27 @@
 # Coinop
 
 > **AI-assisted project.** This codebase was created with [Claude](https://claude.com/claude-code)
-> (Anthropic), directed and reviewed by a human author. The games are verified
-> by an offline harness that drives the real game classes with no graphics API
-> present and asserts on simulation state — that the snake is a given length,
-> that the ball's vertical component never collapses, that a match ends — and a
-> second harness compiles the shaders in a headless GL context and measures what
-> they draw (see [Status](#status)). It has **never been loaded into Resolume**.
-> Check it in your own rig before trusting it in a show.
+> (Anthropic), directed and reviewed by a human author. The games are checked by an
+> offline harness that drives the real game classes with no graphics API present and
+> asserts on simulation state (that the snake is a given length, that the ball's vertical
+> component never collapses, that a match ends), and a second harness compiles the shaders
+> in a headless GL context and measures what they draw (see [Status](#status)). It's
+> **never been loaded into Resolume**. Check it in your own rig before you trust it in a
+> show.
 
 Fourteen playable arcade games for [Resolume](https://resolume.com) Arena and
-Avenue, as a pair of FFGL plugins. Driven by MIDI or OSC, or left to play
-themselves.
+Avenue, as a pair of FFGL plugins. You can drive them with MIDI or OSC, or leave
+them to play themselves and lose on purpose.
 
 **Video:** [Flapper, and the thirteen games it joins, in 63 seconds](https://www.youtube.com/watch?v=29Ay4AHsk5o)
  · [the original five, from v0.1.0](https://www.youtube.com/watch?v=DZyiCXpSt98)
 
 ![Chase, Trails, Stacker and Girders, on four of the six palettes](docs/hero.png)
 
-<sub>Four of the fourteen, on four of the six palettes — Chase on Amber, Trails
+<sub>Four of the fourteen, on four of the six palettes: Chase on Amber, Trails
 on Ice, Stacker on Candy, Girders on Fire. Rendered by `coinopgl`, the offline
-harness: the real autopilot playing through the real cell shader, not a Resolume
-screen capture.</sub>
+harness, so it's the plugin's own autopilot playing through its own cell shader
+rather than a Resolume screen capture.</sub>
 
 | Game | What it is |
 | --- | --- |
@@ -40,14 +40,14 @@ screen capture.</sub>
 | **Duel** | Two fighters. Wind-up, active, recovery. Best of three. |
 | **Flapper** | One button against gravity, through the gaps in a moving wall. |
 
-The mechanics are the public domain part; the names are not. None of these is
+The mechanics are the public domain part; the names aren't. None of these is
 named after what it descends from, and none of them copies the parts a court
-has held to be protected expression — see
-[AGENTS.md](AGENTS.md#naming-and-the-line-the-games-are-written-to) for the rule
-and [`source/games/Stacker.h`](source/games/Stacker.h) for it applied in
+has held to be protected expression.
+[AGENTS.md](AGENTS.md#naming-and-the-line-the-games-are-written-to) has the rule,
+and [`source/games/Stacker.h`](source/games/Stacker.h) shows it applied in
 detail.
 
-`Coinop` is a source. `Coinop Over` is an effect — and in the effect, the brick
+`Coinop` is a source. `Coinop Over` is an effect, and in the effect the brick
 field can be built out of the incoming clip, so breaking a brick punches a hole
 through to the layer below.
 
@@ -55,25 +55,25 @@ through to the layer below.
 
 Two jobs, and most of the design follows from the second:
 
-- **A generator that is genuinely never the same twice.** A seeded game that
+- **A generator that's never the same twice.** A seeded game that
   plays itself, resets when it loses, and has an intensity that climbs through a
   run and drops when it restarts.
 - **Pixel mapping.** The composition *is* the fixture layout, Resolume's pixel
-  mapper samples it, and the playfield is what the lights do. That is why
+  mapper samples it, and the playfield is what the lights do. That's why
   everything is drawn as cells, why the grid size is a parameter, and why even
   the vector game is rasterised.
 
 ![Drift at nineteen cells across, with the cells round and the gaps open](docs/pixelmap.png)
 
 <sub>The same Drift, with the grid coarsened to nineteen cells and the gaps
-opened. This is the shape the plugin takes when a pixel mapper is sampling it —
-and the reason the vector game is drawn as cells at all. A hairline vector lands
+opened. This is the shape the plugin takes when a pixel mapper is sampling it,
+and the reason the vector game is drawn as cells at all: a hairline vector lands
 between fixtures and disappears.</sub>
 
 ## Controls
 
-FFGL has no keyboard and no gamepad — it has parameters, and Resolume will MIDI-
-or OSC-map any of them. So every control is a parameter:
+FFGL doesn't have a keyboard or a gamepad. It has parameters, and Resolume will
+MIDI- or OSC-map any of them, so every control is a parameter:
 
 | Parameter | Good for |
 | --- | --- |
@@ -137,7 +137,7 @@ See [CLAUDE.md](CLAUDE.md) for the full command reference and
 
 Verified offline on macOS, in two harnesses:
 
-- **`coinoptest`** — 268 checks, no GL context. Per-game determinism, the three
+- **`coinoptest`:** 268 checks, no GL context. Per-game determinism, the three
   host-timing defences, and the invariants that matter per game: Snake's turn
   queue, Bricks' tunnelling and its two degenerate-angle locks, Rally's
   termination, Marchers' bounds, Drift's wrapping, Stacker's clear rule,
@@ -145,18 +145,18 @@ Verified offline on macOS, in two harnesses:
   divers rejoining, Trails' head-on symmetry, Reflex's closing window,
   Rafters' one-cell collision, Duel's round limit, Flapper's swept collision
   and its difficulty ramp.
-- **`coinopgl`** — 33 checks, headless CGL. Both shader variants compile and
+- **`coinopgl`:** 33 checks, headless CGL. Both shader variants compile and
   link, all fourteen games render lit cells, the letterbox lands exactly where
-  it should, no GL error.
+  it should, and there's no GL error.
 
-- **`demo/tools/check_sim.mjs`** — the browser demo re-implements all fourteen
+- **`demo/tools/check_sim.mjs`:** the browser demo re-implements all fourteen
   games in JavaScript, and `coinoptest --grid` reduces each one to a digest of
   its playfield after a fixed run. All fourteen agree byte for byte.
 
-Not verified: the plugin has never been loaded into Resolume, and the FFGL
+Not verified: the plugin's never been loaded into Resolume, and the FFGL
 parameter and clock plumbing is the part no harness here reaches. The Windows
-build does compile — v1.0.4 ships a Windows x64 installer and zip, and the
-release workflow builds the DLL on `windows-latest` — but nobody has loaded one
+build does compile (v1.0.4 ships a Windows x64 installer and zip, and the
+release workflow builds the DLL on `windows-latest`), but nobody's loaded one
 into a Windows host.
 
 <!-- attributions:start -->
@@ -167,8 +167,8 @@ This project is built on other people's work — see [ATTRIBUTIONS.md](ATTRIBUTI
 
 MIT. See [LICENSE](LICENSE).
 
-The mechanics here are generic; the names are deliberately not the famous ones,
-and neither is the expression — the playfield is whatever the Grid parameter
+The mechanics here are generic. The names aren't the famous ones, on purpose,
+and neither is the expression: the playfield is whatever the Grid parameter
 says, colour comes from the palette by role, and the features a court has
 specifically named as protected are left out. See the naming note in
 [AGENTS.md](AGENTS.md).
