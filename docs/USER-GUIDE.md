@@ -9,11 +9,11 @@ Avenue, as a pair of FFGL plugins, driven by MIDI or OSC or left to play themsel
 Candy, Girders on Fire.*
 
 > **Before you rely on this:** the games are verified by a harness that drives the real game
-> classes with no graphics API present and asserts on simulation state: 243 checks covering
+> classes with no graphics API present and asserts on simulation state: 268 checks covering
 > per-game determinism, the three host-timing defences, and each game's own invariants: Snake's
 > turn queue, Bricks' tunnelling and its two degenerate-angle locks, Chase's maze loops and
 > reversal ban, Flapper's swept collision. A second harness compiles the shaders in a headless GL
-> context and measures what they draw (31 checks). The browser demo re-implements all fourteen in
+> context and measures what they draw (33 checks). The browser demo re-implements all fourteen in
 > JavaScript and **agrees with the C++ byte for byte** on a playfield digest.
 >
 > **It's never been loaded into Resolume.** The FFGL parameter and clock plumbing is the part no

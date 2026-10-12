@@ -155,7 +155,7 @@ Verified offline on macOS, in two harnesses:
 
 Not verified: the plugin's never been loaded into Resolume, and the FFGL
 parameter and clock plumbing is the part no harness here reaches. The Windows
-build does compile (v1.0.4 ships a Windows x64 installer and zip, and the
+build does compile (v1.0.8 ships a Windows x64 installer and zip, and the
 release workflow builds the DLL on `windows-latest`), but nobody's loaded one
 into a Windows host.
 
