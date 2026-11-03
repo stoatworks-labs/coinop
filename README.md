@@ -16,6 +16,8 @@ them to play themselves and lose on purpose.
 **Video:** [Flapper, and the thirteen games it joins, in 63 seconds](https://www.youtube.com/watch?v=29Ay4AHsk5o)
  · [the original five, from v0.1.0](https://www.youtube.com/watch?v=DZyiCXpSt98)
 
+The [project page](https://stoatworks-labs.com/software/coinop/) has the downloads, the [user guide](https://stoatworks-labs.com/software/coinop/guide/), the video and the [browser demo](https://coinop-demo.stoatworks-labs.com/).
+
 ![Chase, Trails, Stacker and Girders, on four of the six palettes](docs/hero.png)
 
 <sub>Four of the fourteen, on four of the six palettes: Chase on Amber, Trails
